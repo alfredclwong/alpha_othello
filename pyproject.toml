@@ -1,0 +1,15 @@
+[project]
+name = "alpha_othello"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "ipykernel>=6.29.5",
+    "ipywidgets>=8.1.7",
+    "nbformat>=5.10.4",
+    "numpy>=2.2.5",
+    "pandas>=2.2.3",
+    "plotly>=6.1.0",
+    "tqdm>=4.67.1",
+]

@@ -9,14 +9,13 @@ from alpha_othello.othello.ai import (
     ai_greedy,
     ai_heuristic,
     ai_minimax,
-    ai_pass,
     ai_random,
 )
-from alpha_othello.othello.game import GameOverReason, GameResult, run_tournament
+from alpha_othello.othello.game import GameResult, run_tournament
 
 # %%
 ais = [ai_random, ai_greedy, ai_minimax, ai_heuristic]
-results = run_tournament(ais, size=6, n_games_per_pair=1000, time_control_millis=20)
+results = run_tournament(ais, size=6, n_games_per_pair=200, time_control_millis=20)
 
 # %%
 df = pd.DataFrame(
@@ -38,7 +37,9 @@ def hue_to_hex(hue, lightness=0.6, saturation=0.7):
 # Assign a base hue for each result
 unique_results = sorted(df["Result"].unique())
 result_hues = {
-    result: i / len(unique_results) for i, result in enumerate(unique_results)
+    GameResult.BLACK_WINS.value: 0.0,
+    GameResult.DRAW.value: 1/3,
+    GameResult.WHITE_WINS.value: 2/3,
 }
 black_color = hue_to_hex(result_hues[GameResult.BLACK_WINS.value])
 white_color = hue_to_hex(result_hues[GameResult.WHITE_WINS.value])
@@ -96,3 +97,41 @@ fig.update_layout(
 fig.show()
 
 # %%
+import requests
+import json
+from pathlib import Path
+
+secret_path = Path().cwd() / "secret.txt"
+api_key = secret_path.read_text().strip()
+
+model_name = "meta-llama/llama-3.3-8b-instruct:free"
+
+response = requests.post(
+    url="https://openrouter.ai/api/v1/chat/completions",
+    headers={
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    },
+    data=json.dumps(
+        {
+            "model": model_name,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Write a function that takes a board state and returns the best move for the player using the minimax algorithm with alpha-beta pruning.",
+                        }
+                    ],
+                }
+            ],
+        }
+    ),
+)
+
+# %%
+response.json()
+
+# %%
+print(response.json()["choices"][0]["message"]["content"])

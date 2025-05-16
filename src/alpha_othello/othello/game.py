@@ -8,10 +8,10 @@ from typing import Callable, Optional
 import numpy as np
 from tqdm.auto import tqdm
 
-from alpha_othello.othello.board import OthelloState
+from alpha_othello.othello.board import OthelloState, get_valid_moves
 from alpha_othello.othello.util import move_to_string, moves_to_string
 
-AI_FN = Callable[[np.ndarray, bool, int], Optional[tuple[int, int]]]
+AI_FN = Callable[[np.ndarray, bool, tuple[int, int]], tuple[int, int]]
 
 
 class GameResult(Enum):
@@ -57,6 +57,27 @@ class OthelloGame:
         self.remaining_time = [time_control_millis, time_control_millis]
         self.reason = None
 
+    def get_ai_move(self) -> tuple[tuple[int, int], int]:
+        _move: list = [None]
+        exception: list = [None]
+
+        def ai_call():
+            try:
+                board = self.state.board.copy()
+                _move[0] = self.ai_fns[self.state.player](
+                    board, self.state.player, self.remaining_time
+                )
+            except Exception as e:
+                exception[0] = e
+
+        start_time = time.time()
+        thread = threading.Thread(target=ai_call)
+        thread.start()
+        thread.join(self.remaining_time[self.state.player] / 1000)
+        end_time = time.time()
+
+        return _move[0], int((end_time - start_time) * 1000)
+
     def play(self) -> None:
         while True:
             game_over, reason = self.is_game_over()
@@ -64,35 +85,23 @@ class OthelloGame:
                 self.reason = reason
                 break
 
-            _move: list = [None]
-            exception: list = [None]
-
-            def ai_call():
-                try:
-                    board = self.state.board.copy()
-                    _move[0] = self.ai_fns[self.state.player](
-                        board, self.state.player, self.size
-                    )
-                except Exception as e:
-                    exception[0] = e
-
-            start_time = time.time()
-            thread = threading.Thread(target=ai_call)
-            thread.start()
-            thread.join(self.remaining_time[self.state.player] / 1000)
-            end_time = time.time()
-
-            move = _move[0]
-            if self.remaining_time[self.state.player] is not None:
-                elapsed_time = int((end_time - start_time) * 1000)
-                self.remaining_time[self.state.player] -= elapsed_time
-                self.times.append(self.remaining_time[self.state.player])
+            if get_valid_moves(self.state.board, self.state.player):
+                move, elapsed_time = self.get_ai_move()
+            else:
+                # If there are no valid moves, just pass without querying the AI_FN
+                move = None
+                elapsed_time = 0
 
             try:
                 self.state.make_move(move)
                 self.moves.append(move)
             except ValueError:
                 self.illegal_remaining[self.state.player] -= 1
+                continue
+
+            if self.remaining_time[self.state.player] is not None:
+                self.remaining_time[self.state.player] -= elapsed_time
+                self.times.append(self.remaining_time[self.state.player])
 
     def is_game_over(self) -> tuple[bool, Optional[GameOverReason]]:
         if self.state.board.sum(axis=-1).all():

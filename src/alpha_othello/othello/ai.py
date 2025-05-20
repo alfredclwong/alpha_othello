@@ -1,13 +1,7 @@
-from typing import Annotated, Literal, TypeVar
-
 import numpy as np
-import numpy.typing as npt
 
 from alpha_othello.othello.board import get_flips, get_size, get_valid_moves
-
-DType = TypeVar("DType", bound=np.generic)
-T_BOARD = Annotated[npt.NDArray[DType], Literal["size", "size", 2]]
-T_MOVE = tuple[int, int]
+from alpha_othello.othello.types import T_BOARD, T_MOVE
 
 
 def ai_random(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -> T_MOVE:
@@ -17,7 +11,7 @@ def ai_random(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -> 
 
 def ai_greedy(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -> T_MOVE:
     valid_moves = get_valid_moves(board, player)
-    return max(valid_moves, key=lambda move: len(get_flips(board, player, *move)))
+    return max(valid_moves, key=lambda move: len(get_flips(board, player, move)))
 
 
 def ai_minimax(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -> T_MOVE:
@@ -29,7 +23,7 @@ def ai_minimax(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) ->
         if maximizing:
             max_eval = -float("inf")
             for move in moves:
-                flips = get_flips(board, player, *move)
+                flips = get_flips(board, player, move)
                 new_board = board.copy()
                 new_board[move] = player
                 for fx, fy in flips:
@@ -42,7 +36,7 @@ def ai_minimax(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) ->
         else:
             min_eval = float("inf")
             for move in moves:
-                flips = get_flips(board, player, *move)
+                flips = get_flips(board, player, move)
                 new_board = board.copy()
                 new_board[move] = player
                 for fx, fy in flips:
@@ -64,10 +58,10 @@ def ai_heuristic(
 ) -> T_MOVE:
     size = get_size(board)
 
-    def score_move(move) -> float:
+    def score_move(move: T_MOVE) -> int:
         # Copy the board and apply the move
         new_board = board.copy()
-        flips = get_flips(board, player, *move)
+        flips = get_flips(board, player, move)
         new_board[move] = player
         for fx, fy in flips:
             new_board[fx, fy] = player
@@ -115,7 +109,7 @@ def ai_mobility(
     for move in valid_moves:
         # Apply move
         new_board = board.copy()
-        flips = get_flips(board, player, *move)
+        flips = get_flips(board, player, move)
         new_board[move] = player
         for fx, fy in flips:
             new_board[fx, fy] = player
@@ -136,9 +130,9 @@ def ai_parity(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -> 
     """
     valid_moves = get_valid_moves(board, player)
 
-    def parity_score(move):
+    def parity_score(move: T_MOVE) -> int:
         new_board = board.copy()
-        flips = get_flips(board, player, *move)
+        flips = get_flips(board, player, move)
         new_board[move] = player
         for fx, fy in flips:
             new_board[fx, fy] = player

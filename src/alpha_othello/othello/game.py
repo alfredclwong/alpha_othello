@@ -3,15 +3,13 @@ import time
 from collections import defaultdict
 from enum import Enum
 from itertools import product
-from typing import Callable, Optional
+from typing import Optional
 
-import numpy as np
 from tqdm.auto import tqdm
 
 from alpha_othello.othello.board import OthelloState, get_valid_moves
+from alpha_othello.othello.types import T_AI_FN
 from alpha_othello.othello.util import move_to_string, moves_to_string
-
-AI_FN = Callable[[np.ndarray, bool, tuple[int, int]], tuple[int, int]]
 
 
 class GameResult(Enum):
@@ -30,7 +28,7 @@ class GameOverReason(Enum):
 class OthelloGame:
     def __init__(
         self,
-        ai_fns: tuple[AI_FN, AI_FN],
+        ai_fns: tuple[T_AI_FN, T_AI_FN],
         size: int = 8,
         time_control_millis: int = 100,
         illegal_limit: int = 3,
@@ -81,9 +79,15 @@ class OthelloGame:
                 elapsed_time = 0
 
             if self.state.player == 0:
-                remaining_time = (self.remaining_time[0] - elapsed_time, self.remaining_time[1])
+                remaining_time = (
+                    self.remaining_time[0] - elapsed_time,
+                    self.remaining_time[1],
+                )
             else:
-                remaining_time = (self.remaining_time[0], self.remaining_time[1] - elapsed_time)
+                remaining_time = (
+                    self.remaining_time[0],
+                    self.remaining_time[1] - elapsed_time,
+                )
             self.remaining_time = remaining_time
             self.times.append(remaining_time[self.state.player])
             if any(x <= 0 for x in self.remaining_time):
@@ -148,7 +152,7 @@ class OthelloGame:
 
 
 def run_tournament(
-    ais: list[AI_FN],
+    ais: list[T_AI_FN],
     size: int = 6,
     n_games_per_pair: int = 100,
     time_control_millis: int = 100,

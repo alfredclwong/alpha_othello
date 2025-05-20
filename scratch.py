@@ -10,11 +10,13 @@ from alpha_othello.othello.ai import (
     ai_heuristic,
     ai_minimax,
     ai_random,
+    ai_mobility,
+    ai_parity,
 )
 from alpha_othello.othello.game import GameResult, run_tournament
 
 # %%
-ais = [ai_random, ai_greedy, ai_minimax, ai_heuristic]
+ais = [ai_random, ai_greedy, ai_minimax, ai_heuristic, ai_mobility, ai_parity]
 results = run_tournament(ais, size=6, n_games_per_pair=200, time_control_millis=20)
 
 # %%
@@ -97,41 +99,3 @@ fig.update_layout(
 fig.show()
 
 # %%
-import requests
-import json
-from pathlib import Path
-
-secret_path = Path().cwd() / "secret.txt"
-api_key = secret_path.read_text().strip()
-
-model_name = "meta-llama/llama-3.3-8b-instruct:free"
-
-response = requests.post(
-    url="https://openrouter.ai/api/v1/chat/completions",
-    headers={
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    },
-    data=json.dumps(
-        {
-            "model": model_name,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Write a function that takes a board state and returns the best move for the player using the minimax algorithm with alpha-beta pruning.",
-                        }
-                    ],
-                }
-            ],
-        }
-    ),
-)
-
-# %%
-response.json()
-
-# %%
-print(response.json()["choices"][0]["message"]["content"])

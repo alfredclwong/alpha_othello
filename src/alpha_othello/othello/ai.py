@@ -1,25 +1,26 @@
+from typing import Annotated, Literal, TypeVar
+
 import numpy as np
+import numpy.typing as npt
 
-from alpha_othello.othello.board import get_flips, get_valid_moves, get_size
+from alpha_othello.othello.board import get_flips, get_size, get_valid_moves
+
+DType = TypeVar("DType", bound=np.generic)
+T_BOARD = Annotated[npt.NDArray[DType], Literal["size", "size", 2]]
+T_MOVE = tuple[int, int]
 
 
-def ai_random(
-    board: np.ndarray, player: bool, time_remaining: tuple[int, int]
-) -> tuple[int, int]:
+def ai_random(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -> T_MOVE:
     valid_moves = get_valid_moves(board, player)
     return valid_moves[np.random.randint(len(valid_moves))]
 
 
-def ai_greedy(
-    board: np.ndarray, player: bool, time_remaining: tuple[int, int]
-) -> tuple[int, int]:
+def ai_greedy(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -> T_MOVE:
     valid_moves = get_valid_moves(board, player)
     return max(valid_moves, key=lambda move: len(get_flips(board, player, *move)))
 
 
-def ai_minimax(
-    board: np.ndarray, player: bool, time_remaining: tuple[int, int]
-) -> tuple[int, int]:
+def ai_minimax(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -> T_MOVE:
     def minimax(board, player, depth, maximizing):
         moves = get_valid_moves(board, player)
         if depth == 0 or not moves:
@@ -53,12 +54,14 @@ def ai_minimax(
             return min_eval, best_move
 
     _, move = minimax(board, player, depth=2, maximizing=True)
+    if move is None:
+        raise ValueError("No valid moves available")
     return move
 
 
 def ai_heuristic(
-    board: np.ndarray, player: bool, time_remaining: tuple[int, int]
-) -> tuple[int, int]:
+    board: T_BOARD, player: bool, time_remaining: tuple[int, int]
+) -> T_MOVE:
     size = get_size(board)
 
     def score_move(move) -> float:
@@ -96,3 +99,51 @@ def ai_heuristic(
 
     valid_moves = get_valid_moves(board, player)
     return max(valid_moves, key=score_move)
+
+
+def ai_mobility(
+    board: T_BOARD, player: bool, time_remaining: tuple[int, int]
+) -> T_MOVE:
+    """
+    AI that chooses the move maximizing its own mobility (number of valid moves next turn).
+    If multiple moves yield the same mobility, pick one at random.
+    """
+    valid_moves = get_valid_moves(board, player)
+
+    best_moves = []
+    max_mobility = -float("inf")
+    for move in valid_moves:
+        # Apply move
+        new_board = board.copy()
+        flips = get_flips(board, player, *move)
+        new_board[move] = player
+        for fx, fy in flips:
+            new_board[fx, fy] = player
+        # Count mobility for next turn
+        mobility = len(get_valid_moves(new_board, player))
+        if mobility > max_mobility:
+            max_mobility = mobility
+            best_moves = [move]
+        elif mobility == max_mobility:
+            best_moves.append(move)
+    return best_moves[np.random.randint(len(best_moves))]
+
+
+def ai_parity(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -> T_MOVE:
+    """
+    AI that prefers moves leaving an even number of empty squares (parity heuristic).
+    In Othello, parity is often advantageous in endgames.
+    """
+    valid_moves = get_valid_moves(board, player)
+
+    def parity_score(move):
+        new_board = board.copy()
+        flips = get_flips(board, player, *move)
+        new_board[move] = player
+        for fx, fy in flips:
+            new_board[fx, fy] = player
+        empty_count = np.sum(new_board == -1)  # assuming -1 is empty
+        # Prefer even parity
+        return -(empty_count % 2)
+
+    return max(valid_moves, key=parity_score)

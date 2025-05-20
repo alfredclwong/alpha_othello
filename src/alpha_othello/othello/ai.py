@@ -53,9 +53,7 @@ def ai_minimax(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) ->
     return move
 
 
-def ai_heuristic(
-    board: T_BOARD, player: bool, time_remaining: tuple[int, int]
-) -> T_MOVE:
+def ai_heuristic(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -> T_MOVE:
     size = get_size(board)
 
     def score_move(move: T_MOVE) -> int:
@@ -95,9 +93,7 @@ def ai_heuristic(
     return max(valid_moves, key=score_move)
 
 
-def ai_mobility(
-    board: T_BOARD, player: bool, time_remaining: tuple[int, int]
-) -> T_MOVE:
+def ai_mobility(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -> T_MOVE:
     """
     AI that chooses the move maximizing its own mobility (number of valid moves next turn).
     If multiple moves yield the same mobility, pick one at random.

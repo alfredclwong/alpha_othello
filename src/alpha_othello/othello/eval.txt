@@ -1,0 +1,31 @@
+import sys
+import numpy as np
+from collections import Counter
+from alpha_othello.othello.types import T_BOARD, T_MOVE
+from alpha_othello.othello.game import OthelloGame
+from alpha_othello.othello.board import get_valid_moves, is_valid_move, get_flips, get_size
+
+def ai_1(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -> T_MOVE:
+<AI_1>
+
+def ai_2(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -> T_MOVE:
+<AI_2>
+
+if __name__ == "__main__":
+    args = sys.argv[1:]
+    n_games, size, time_control_millis = map(int, args)
+
+    results = Counter()
+    for i in range(n_games):
+        game = OthelloGame(
+            (ai_1, ai_2), size=size, time_control_millis=time_control_millis
+        )
+        game.play()
+        result = game.result
+        reason = game.reason
+        if result is None or reason is None:
+            raise ValueError("Game did not finish properly.")
+        results[(result.value, reason.value)] += 1
+
+    for (result, reason), count in results.items():
+        print(f"{result},{reason},{count}")

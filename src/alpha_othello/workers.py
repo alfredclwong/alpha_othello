@@ -59,10 +59,6 @@ def extract_completion(llm_output: str) -> str:
     return code
 
 
-def complete_skeleton(skeleton: str, completion: str) -> str:
-    return skeleton + completion
-
-
 def get_llm_output(
     prompt: str, model_name: str, api_key: str, max_tokens: int
 ) -> str:

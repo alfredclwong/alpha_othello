@@ -44,14 +44,17 @@ class SQLiteDatabase:
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
 
-        # Insert null llm and prompt for initial completions
+        # If LLM or Prompt tables are empty, add a null entries
         session = self.get_session()
-        null_llm = LLM(name="null")
-        null_prompt = Prompt(prompt="null", inspiration_ids="")
-        session.add(null_llm)
-        session.add(null_prompt)
+        llm_count = session.query(LLM).count()
+        prompt_count = session.query(Prompt).count()
+        if llm_count == 0:
+            null_llm = LLM(name="null")
+            session.add(null_llm)
+        if prompt_count == 0:
+            null_prompt = Prompt(prompt="null", inspiration_ids="")
+            session.add(null_prompt)
         session.commit()
-        session.close()
 
     def get_session(self):
         return self.Session()
@@ -75,9 +78,12 @@ class SQLiteDatabase:
 
     def store_llm(self, name: str) -> int:
         session = self.get_session()
-        llm = LLM(name=name)
-        session.add(llm)
-        session.commit()
+        # If the LLM already exists, don't add it again
+        llm = session.query(LLM).filter(LLM.name == name).first()
+        if not llm:
+            llm = LLM(name=name)
+            session.add(llm)
+            session.commit()
         llm_id = getattr(llm, "id")
         session.close()
         return llm_id
@@ -112,34 +118,34 @@ class SQLiteDatabase:
         session.close()
         return score_id
 
-    def get_llm(self, llm_id: int) -> LLM:
+    def get_llm(self, llm_id: int) -> str:
         session = self.get_session()
         llm = session.query(LLM).filter(LLM.id == llm_id).first()
         session.close()
-        return llm
+        return getattr(llm, "name")
 
-    def get_prompt(self, prompt_id: int) -> Prompt:
+    def get_prompt(self, prompt_id: int) -> str:
         session = self.get_session()
         prompt = session.query(Prompt).filter(Prompt.id == prompt_id).first()
         session.close()
-        return prompt
+        return getattr(prompt, "prompt")
 
-    def get_completion(self, completion_id: int) -> Completion:
+    def get_completion(self, completion_id: int) -> str:
         session = self.get_session()
         completion = (
             session.query(Completion).filter(Completion.id == completion_id).first()
         )
         session.close()
-        return completion
+        return getattr(completion, "completion")
 
-    def get_score(self, score_id: int) -> Score:
+    def get_score(self, score_id: int) -> int:
         session = self.get_session()
         score = session.query(Score).filter(Score.id == score_id).first()
         session.close()
-        return score
+        return getattr(score, "score")
 
-    def get_all_llms(self) -> list[LLM]:
+    def get_all_llms(self) -> list[str]:
         session = self.get_session()
         llms = session.query(LLM).all()
         session.close()
-        return llms
+        return [getattr(llm, "name") for llm in llms]

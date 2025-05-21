@@ -1,22 +1,21 @@
 import numpy as np
+from othello.state import get_flips, get_legal_squares, get_size
+from othello.types import T_BOARD, T_CLOCK, T_SQUARE, Player
 
-from alpha_othello.othello.board import get_flips, get_size, get_valid_moves
-from alpha_othello.othello.types import T_BOARD, T_MOVE
 
-
-def ai_random(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -> T_MOVE:
-    valid_moves = get_valid_moves(board, player)
+def ai_random(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
+    valid_moves = get_legal_squares(board, player)
     return valid_moves[np.random.randint(len(valid_moves))]
 
 
-def ai_greedy(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -> T_MOVE:
-    valid_moves = get_valid_moves(board, player)
+def ai_greedy(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
+    valid_moves = get_legal_squares(board, player)
     return max(valid_moves, key=lambda move: len(get_flips(board, player, move)))
 
 
-def ai_minimax(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -> T_MOVE:
+def ai_minimax(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
     def minimax(board, player, depth, maximizing):
-        moves = get_valid_moves(board, player)
+        moves = get_legal_squares(board, player)
         if depth == 0 or not moves:
             return np.sum(board == player), None
         best_move = None
@@ -53,10 +52,10 @@ def ai_minimax(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) ->
     return move
 
 
-def ai_heuristic(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -> T_MOVE:
+def ai_heuristic(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
     size = get_size(board)
 
-    def score_move(move: T_MOVE) -> int:
+    def score_move(move: T_SQUARE) -> int:
         # Copy the board and apply the move
         new_board = board.copy()
         flips = get_flips(board, player, move)
@@ -77,7 +76,7 @@ def ai_heuristic(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) 
         disc_diff = np.sum(new_board == player) - np.sum(new_board == (not player))
 
         # Mobility (number of moves next turn)
-        opp_moves = len(get_valid_moves(new_board, not player))
+        opp_moves = len(get_legal_squares(new_board, ~player))
         mobility = -opp_moves
 
         # Weighted sum
@@ -89,16 +88,16 @@ def ai_heuristic(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) 
             + 3 * mobility
         )
 
-    valid_moves = get_valid_moves(board, player)
+    valid_moves = get_legal_squares(board, player)
     return max(valid_moves, key=score_move)
 
 
-def ai_mobility(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -> T_MOVE:
+def ai_mobility(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
     """
     AI that chooses the move maximizing its own mobility (number of valid moves next turn).
     If multiple moves yield the same mobility, pick one at random.
     """
-    valid_moves = get_valid_moves(board, player)
+    valid_moves = get_legal_squares(board, player)
 
     best_moves = []
     max_mobility = -float("inf")
@@ -110,7 +109,7 @@ def ai_mobility(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -
         for fx, fy in flips:
             new_board[fx, fy] = player
         # Count mobility for next turn
-        mobility = len(get_valid_moves(new_board, player))
+        mobility = len(get_legal_squares(new_board, player))
         if mobility > max_mobility:
             max_mobility = mobility
             best_moves = [move]
@@ -119,14 +118,14 @@ def ai_mobility(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -
     return best_moves[np.random.randint(len(best_moves))]
 
 
-def ai_parity(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -> T_MOVE:
+def ai_parity(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
     """
     AI that prefers moves leaving an even number of empty squares (parity heuristic).
     In Othello, parity is often advantageous in endgames.
     """
-    valid_moves = get_valid_moves(board, player)
+    valid_moves = get_legal_squares(board, player)
 
-    def parity_score(move: T_MOVE) -> int:
+    def parity_score(move: T_SQUARE) -> int:
         new_board = board.copy()
         flips = get_flips(board, player, move)
         new_board[move] = player

@@ -1,30 +1,43 @@
+from enum import Enum
+from itertools import product
 from typing import Annotated, Literal
+
 import numpy as np
 import numpy.typing as npt
 
+
+class Player(Enum):
+    BLACK = 0
+    WHITE = 1
+
+    def __invert__(self) -> "Player":
+        return Player(1 - self.value)
+
+
 T_BOARD = Annotated[npt.NDArray[np.bool], Literal["size", "size", 2]]
-T_MOVE = tuple[int, int]
+T_CLOCK = tuple[int, int]
+T_SQUARE = tuple[int, int]
 
-def get_valid_moves(board: T_BOARD, player: bool) -> list[T_MOVE]:
+
+def get_legal_squares(board: T_BOARD, player: Player) -> list[T_SQUARE]:
     size = get_size(board)
-    valid_moves = []
+    all_squares = [(r, c) for r, c in product(range(size), repeat=2)]
+    legal_squares = [s for s in all_squares if is_legal_square(board, player, s)]
+    return legal_squares
 
-    for row in range(size):
-        for col in range(size):
-            move = (row, col)
-            if is_valid_move(board, player, move):
-                valid_moves.append(move)
-    return valid_moves
 
-def is_valid_move(board: T_BOARD, player: bool, move: T_MOVE) -> bool:
-    if board[*move].any():
+def is_legal_square(board: T_BOARD, player: Player, square: T_SQUARE) -> bool:
+    if not is_empty(board, square):
         return False
-    flips = get_flips(board, player, move)
+    flips = get_flips(board, player, square)
     return len(flips) > 0
 
-def get_flips(board: T_BOARD, player: bool, move: T_MOVE) -> list[T_MOVE]:
+
+def get_flips(board: T_BOARD, player: Player, square: T_SQUARE) -> list[T_SQUARE]:
+    if not is_empty(board, square):
+        return []
     size = get_size(board)
-    row, col = move
+    row, col = square
     flips = []
     directions = [
         (-1, -1),
@@ -40,10 +53,10 @@ def get_flips(board: T_BOARD, player: bool, move: T_MOVE) -> list[T_MOVE]:
         r, c = row + dr, col + dc
         temp_flips = []
         while 0 <= r < size and 0 <= c < size:
-            if board[r, c, int(player)]:
+            if board[r, c, player.value]:
                 flips.extend(temp_flips)
                 break
-            elif board[r, c, int(not player)]:
+            elif board[r, c, (~player).value]:
                 temp_flips.append((r, c))
                 r += dr
                 c += dc
@@ -51,19 +64,25 @@ def get_flips(board: T_BOARD, player: bool, move: T_MOVE) -> list[T_MOVE]:
                 break
     return flips
 
+
+def is_empty(board: T_BOARD, square: T_SQUARE) -> bool:
+    return not board[square].any()
+
+
 def get_size(board: T_BOARD) -> int:
     return board.shape[0]
 
-def ai(board: T_BOARD, player: bool, time_remaining: tuple[int, int]) -> T_MOVE:
+
+def ai(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
     """
     AI function to select a move in the Othello game.
 
     Args:
         board (T_BOARD): The current state of the Othello board. board[:, :, 0] represents player 0's pieces,
                          and board[:, :, 1] represents player 1's pieces.
-        player (bool): The current player (False for player 0, True for player 1).
-        time_remaining (tuple[int, int]): Remaining time for both players in milliseconds.
+        player (Player): The current player (value 0 or 1).
+        clock (T_CLOCK): Remaining time for both players in milliseconds.
 
     Returns:
-        T_MOVE: The selected move as a tuple of coordinates (x, y).
+        T_SQUARE: The selected move as a tuple of coordinates (x, y).
     """

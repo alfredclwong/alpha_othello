@@ -13,17 +13,12 @@
 import inspect
 from pathlib import Path
 
+from othello.types import Player
+
 from alpha_othello.database import SQLiteDatabase
 from alpha_othello.othello.ai import ai_greedy, ai_heuristic, ai_random
-from alpha_othello.othello.board import (
-    get_flips,
-    get_size,
-    get_valid_moves,
-    is_valid_move,
-)
 from alpha_othello.othello.docker import play_in_docker
 from alpha_othello.workers import (
-    complete_skeleton,
     extract_completion,
     generate_prompt,
     get_llm_output,
@@ -91,12 +86,12 @@ def main():
         for _ in range(n_generations_per_llm):
             # llm_output = get_llm_output(prompt, llm, api_key, max_tokens)
             # completion = extract_completion(llm_output)
-            completion = getattr(db.get_completion(3), "completion")
+            completion = db.get_completion(3)
             if completion is None:
                 continue
             completion_id = db.store_completion(completion, llm_id, prompt_id)
 
-            opponent_completion = getattr(db.get_completion(1), "completion")
+            opponent_completion = db.get_completion(1)
             if opponent_completion is None:
                 continue
 
@@ -118,19 +113,19 @@ def main():
 
             score = 0
             for (result, reason), count in results_as_black.items():
-                if result == "black":
+                if result == str(Player.BLACK):
                     score += count
-                elif result == "white":
+                elif result == str(Player.WHITE):
                     score -= count
-                elif result == "draw":
+                elif result == "None":
                     score += 0
 
             for (result, reason), count in results_as_white.items():
-                if result == "black":
+                if result == str(Player.BLACK):
                     score -= count
-                elif result == "white":
+                elif result == str(Player.WHITE):
                     score += count
-                elif result == "draw":
+                elif result == "None":
                     score += 0
 
             score_id = db.store_score(score, completion_id)

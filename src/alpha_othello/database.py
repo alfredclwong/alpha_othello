@@ -1,194 +1,145 @@
-import sqlite3
-from abc import ABC, abstractmethod
-from typing import Optional
+from sqlalchemy import Column, ForeignKey, Integer, String, Text, create_engine
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+
+Base = declarative_base()
 
 
-class Database(ABC):
-    conn: sqlite3.Connection
-
-    @abstractmethod
-    def get_topk_completions(self, k: int) -> list[int]:
-        """Get the completion ids of the top k scoring completions."""
-        pass
-
-    @abstractmethod
-    def store_llm(self, llm_name: str) -> int:
-        pass
-
-    @abstractmethod
-    def store_completion(self, completion: str, llm_id: int, prompt_id: int) -> int:
-        pass
-
-    @abstractmethod
-    def store_score(self, score: int, completion_id: int) -> int:
-        pass
-
-    @abstractmethod
-    def store_prompt(self, prompt: str, inspiration_ids: list[int]) -> int:
-        pass
-
-    @abstractmethod
-    def get_llm(self, llm_id: int) -> Optional[str]:
-        pass
-
-    @abstractmethod
-    def get_completion(self, completion_id: int) -> Optional[str]:
-        pass
-
-    @abstractmethod
-    def get_score(self, completion_id: int) -> Optional[int]:
-        pass
-
-    @abstractmethod
-    def get_prompt(self, prompt_id: int) -> Optional[str]:
-        pass
+class LLM(Base):
+    __tablename__ = "llm"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False)
+    completions = relationship("Completion", back_populates="llm")
 
 
-class SQLiteDatabase(Database):
-    def __init__(self, db_path: str = "alpha_othello.db"):
-        self.conn = sqlite3.connect(db_path)
-        self._create_tables()
+class Prompt(Base):
+    __tablename__ = "prompt"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    prompt = Column(Text, nullable=False)
+    inspiration_ids = Column(String)  # store as comma-separated string
+    completions = relationship("Completion", back_populates="prompt")
 
-    def __del__(self):
-        self.conn.close()
 
-    def _create_tables(self):
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS llm (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS prompt (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                prompt TEXT NOT NULL,
-                inspiration_ids TEXT
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS completion (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                completion TEXT NOT NULL,
-                llm_id TEXT NOT NULL,
-                prompt_id TEXT NOT NULL,
-                FOREIGN KEY(llm_id) REFERENCES llm(id),
-                FOREIGN KEY(prompt_id) REFERENCES prompt(id)
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS score (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                score INTEGER NOT NULL,
-                completion_id TEXT NOT NULL,
-                FOREIGN KEY(completion_id) REFERENCES completion(id)
-            )
-        """)
-        self.conn.commit()
+class Completion(Base):
+    __tablename__ = "completion"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    completion = Column(Text, nullable=False)
+    llm_id = Column(Integer, ForeignKey("llm.id"), nullable=False)
+    prompt_id = Column(Integer, ForeignKey("prompt.id"), nullable=False)
+    llm = relationship("LLM", back_populates="completions")
+    prompt = relationship("Prompt", back_populates="completions")
+    scores = relationship("Score", back_populates="completion")
+
+
+class Score(Base):
+    __tablename__ = "score"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    score = Column(Integer, nullable=False)
+    completion_id = Column(Integer, ForeignKey("completion.id"), nullable=False)
+    completion = relationship("Completion", back_populates="scores")
+
+
+class SQLiteDatabase:
+    def __init__(self, db_url: str):
+        self.engine = create_engine(db_url)
+        Base.metadata.create_all(self.engine)
+        self.Session = sessionmaker(bind=self.engine)
+
+        # Insert null llm and prompt for initial completions
+        session = self.get_session()
+        null_llm = LLM(name="null")
+        null_prompt = Prompt(prompt="null", inspiration_ids="")
+        session.add(null_llm)
+        session.add(null_prompt)
+        session.commit()
+        session.close()
+
+    def get_session(self):
+        return self.Session()
+
+    def close(self):
+        self.engine.dispose()
 
     def get_topk_completions(self, k: int) -> list[int]:
-        cursor = self.conn.cursor()
-        query = """
-            SELECT completion_id
-            FROM score
-            LEFT JOIN completion ON score.completion_id = completion.id
-            ORDER BY score DESC
-            LIMIT ?
-        """
-        cursor.execute(query, (k,))
-        results = cursor.fetchall()
-        return [row[0] for row in results]
-
-    def store_llm(self, llm_name: str) -> int:
-        cursor = self.conn.cursor()
-        cursor.execute(
-            "INSERT INTO llm (name) VALUES (?)",
-            (llm_name,),
+        session = self.get_session()
+        top_completions = (
+            session.query(Completion)
+            .join(Score)
+            .group_by(Completion.id)
+            .order_by(Score.score.desc())
+            .limit(k)
+            .all()
         )
-        self.conn.commit()
-        llm_id = cursor.lastrowid
-        if llm_id is None:
-            raise ValueError("Failed to store LLM.")
+        session.close()
+        completion_ids = [getattr(completion, "id") for completion in top_completions]
+        return completion_ids
+
+    def store_llm(self, name: str) -> int:
+        session = self.get_session()
+        llm = LLM(name=name)
+        session.add(llm)
+        session.commit()
+        llm_id = getattr(llm, "id")
+        session.close()
         return llm_id
-    
-    def store_completion(self, completion: str, llm_id: int, prompt_id: int) -> int:
-        cursor = self.conn.cursor()
-        cursor.execute(
-            "INSERT INTO completion (completion, llm_id, prompt_id) VALUES (?, ?, ?)",
-            (completion, llm_id, prompt_id),
-        )
-        self.conn.commit()
-        completion_id = cursor.lastrowid
-        if completion_id is None:
-            raise ValueError("Failed to store completion.")
-        return completion_id
-    
-    def store_score(self, score: int, completion_id: int) -> int:
-        cursor = self.conn.cursor()
-        cursor.execute(
-            "INSERT INTO score (score, completion_id) VALUES (?, ?)",
-            (score, completion_id),
-        )
-        self.conn.commit()
-        score_id = cursor.lastrowid
-        if score_id is None:
-            raise ValueError("Failed to store score.")
-        return score_id
-    
+
     def store_prompt(self, prompt: str, inspiration_ids: list[int]) -> int:
-        cursor = self.conn.cursor()
+        session = self.get_session()
         inspiration_ids_str = ",".join(map(str, inspiration_ids))
-        cursor.execute(
-            "INSERT INTO prompt (prompt, inspiration_ids) VALUES (?, ?)",
-            (prompt, inspiration_ids_str),
-        )
-        self.conn.commit()
-        prompt_id = cursor.lastrowid
-        if prompt_id is None:
-            raise ValueError("Failed to store prompt.")
+        prompt_obj = Prompt(prompt=prompt, inspiration_ids=inspiration_ids_str)
+        session.add(prompt_obj)
+        session.commit()
+        prompt_id = getattr(prompt_obj, "id")
+        session.close()
         return prompt_id
-    
-    def get_llm(self, llm_id: int) -> Optional[str]:
-        cursor = self.conn.cursor()
-        cursor.execute(
-            "SELECT name FROM llm WHERE id = ?",
-            (llm_id,),
+
+    def store_completion(self, completion: str, llm_id: int, prompt_id: int) -> int:
+        session = self.get_session()
+        completion_obj = Completion(
+            completion=completion, llm_id=llm_id, prompt_id=prompt_id
         )
-        result = cursor.fetchone()
-        if result is None:
-            return None
-        return result[0]
-    
-    def get_completion(self, completion_id: int) -> Optional[str]:
-        cursor = self.conn.cursor()
-        cursor.execute(
-            "SELECT completion FROM completion WHERE id = ?",
-            (completion_id,),
+        session.add(completion_obj)
+        session.commit()
+        completion_id = getattr(completion_obj, "id")
+        session.close()
+        return completion_id
+
+    def store_score(self, score: int, completion_id: int) -> int:
+        session = self.get_session()
+        score_obj = Score(score=score, completion_id=completion_id)
+        session.add(score_obj)
+        session.commit()
+        score_id = getattr(score_obj, "id")
+        session.close()
+        return score_id
+
+    def get_llm(self, llm_id: int) -> LLM:
+        session = self.get_session()
+        llm = session.query(LLM).filter(LLM.id == llm_id).first()
+        session.close()
+        return llm
+
+    def get_prompt(self, prompt_id: int) -> Prompt:
+        session = self.get_session()
+        prompt = session.query(Prompt).filter(Prompt.id == prompt_id).first()
+        session.close()
+        return prompt
+
+    def get_completion(self, completion_id: int) -> Completion:
+        session = self.get_session()
+        completion = (
+            session.query(Completion).filter(Completion.id == completion_id).first()
         )
-        result = cursor.fetchone()
-        if result is None:
-            return None
-        return result[0]
-    
-    def get_score(self, completion_id: int) -> Optional[int]:
-        cursor = self.conn.cursor()
-        cursor.execute(
-            "SELECT score FROM score WHERE completion_id = ?",
-            (completion_id,),
-        )
-        result = cursor.fetchone()
-        if result is None:
-            return None
-        return result[0]
-    
-    def get_prompt(self, prompt_id: int) -> Optional[str]:
-        cursor = self.conn.cursor()
-        cursor.execute(
-            "SELECT prompt FROM prompt WHERE id = ?",
-            (prompt_id,),
-        )
-        result = cursor.fetchone()
-        if result is None:
-            return None
-        return result[0]
+        session.close()
+        return completion
+
+    def get_score(self, score_id: int) -> Score:
+        session = self.get_session()
+        score = session.query(Score).filter(Score.id == score_id).first()
+        session.close()
+        return score
+
+    def get_all_llms(self) -> list[LLM]:
+        session = self.get_session()
+        llms = session.query(LLM).all()
+        session.close()
+        return llms

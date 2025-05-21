@@ -12,5 +12,6 @@ dependencies = [
     "pandas>=2.2.3",
     "plotly>=6.1.0",
     "requests>=2.32.3",
+    "sqlalchemy>=2.0.41",
     "tqdm>=4.67.1",
 ]

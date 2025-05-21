@@ -14,20 +14,20 @@ import inspect
 from pathlib import Path
 
 from alpha_othello.database import SQLiteDatabase
-from alpha_othello.othello.ai import ai_greedy, ai_random, ai_heuristic
+from alpha_othello.othello.ai import ai_greedy, ai_heuristic, ai_random
 from alpha_othello.othello.board import (
     get_flips,
     get_size,
     get_valid_moves,
     is_valid_move,
 )
+from alpha_othello.othello.docker import play_in_docker
 from alpha_othello.workers import (
     complete_skeleton,
     extract_completion,
     generate_prompt,
     get_llm_output,
 )
-from alpha_othello.othello.docker import play_in_docker
 
 
 def main():
@@ -45,9 +45,11 @@ def main():
 
     task = f"Implement the AI function to play the best possible move in {size}x{size} Othello."
 
-    db = SQLiteDatabase()
+    db = SQLiteDatabase("sqlite:///othello.db")
 
-    llm_ids = [db.store_llm("meta-llama/llama-3.3-8b-instruct:free")]
+    llm_ids = [
+        db.store_llm("meta-llama/llama-3.3-8b-instruct:free"),
+    ]
 
     ais = [
         ai_random,
@@ -58,7 +60,7 @@ def main():
     for ai in ais:
         code = inspect.getsource(ai)
         completion = "\n".join(code.splitlines()[1:])
-        completion_id = db.store_completion(completion, -1, -1)
+        completion_id = db.store_completion(completion, 1, 1)
         db.store_score(0, completion_id)
 
     k = 2
@@ -89,12 +91,12 @@ def main():
         for _ in range(n_generations_per_llm):
             # llm_output = get_llm_output(prompt, llm, api_key, max_tokens)
             # completion = extract_completion(llm_output)
-            completion = db.get_completion(3)
+            completion = getattr(db.get_completion(3), "completion")
             if completion is None:
                 continue
             completion_id = db.store_completion(completion, llm_id, prompt_id)
 
-            opponent_completion = db.get_completion(1)
+            opponent_completion = getattr(db.get_completion(1), "completion")
             if opponent_completion is None:
                 continue
 

@@ -179,18 +179,13 @@ def ai_parity(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
 egaroucid_exe_path = Path("./Egaroucid4/src/egaroucid4.out")
 
 
-def init_egaroucid_ai(
-    exe_path: Path, player: Player, depth: int = 2, final_depth: int = 4
-):
+def init_egaroucid_ai(exe_path: Path):
     ai_exe = subprocess.Popen(
         exe_path.absolute(),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         cwd=exe_path.parent,
     )
-    lines = [player.value, depth, final_depth]
-    ai_exe.stdin.writelines([f"{x}\n".encode("utf-8") for x in lines])
-    ai_exe.stdin.flush()
     return ai_exe
 
 
@@ -203,24 +198,32 @@ def board_to_egaroucid_str(board) -> str:
     return grid_str
 
 
-def ai_egaroucid(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
-    if player == Player.BLACK:
-        if "ai_exe_black" in globals():
-            global ai_exe_black
-        else:
-            global ai_exe_black
-            ai_exe_black = init_egaroucid_ai(egaroucid_exe_path, player)
-        ai_exe = ai_exe_black
+def _ai_egaroucid(board: T_BOARD, player: Player, clock: T_CLOCK, depth=0, final_depth=0) -> T_SQUARE:
+    if "ai_exe" in globals():
+        global ai_exe
     else:
-        if "ai_exe_white" in globals():
-            global ai_exe_white
-        else:
-            global ai_exe_white
-            ai_exe_white = init_egaroucid_ai(egaroucid_exe_path, player)
-        ai_exe = ai_exe_white
+        global ai_exe
+        ai_exe = init_egaroucid_ai(egaroucid_exe_path)
 
     grid_str = board_to_egaroucid_str(board)
+    ai_exe.stdin.write(f"{player.value}\n".encode("utf-8"))
+    ai_exe.stdin.write(f"{depth}\n".encode("utf-8"))
+    ai_exe.stdin.write(f"{final_depth}\n".encode("utf-8"))
+    ai_exe.stdin.flush()
     ai_exe.stdin.write(grid_str.encode("utf-8"))
     ai_exe.stdin.flush()
+
     y, x, val = [float(elem) for elem in ai_exe.stdout.readline().decode().split()]
     return int(y), int(x)
+
+
+def ai_egaroucid_easy(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
+    return _ai_egaroucid(board, player, clock, 2, 1)
+
+
+def ai_egaroucid_med(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
+    return _ai_egaroucid(board, player, clock, 3, 3)
+
+
+def ai_egaroucid_hard(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
+    return _ai_egaroucid(board, player, clock, 5, 5)

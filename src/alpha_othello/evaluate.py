@@ -4,17 +4,10 @@ import time
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from othello.types import Player
+from othello.types import T_PLAYER_FN, Player
 
 from alpha_othello.llm import extract_tagged_text
-from alpha_othello.othello.ai import (
-    ai_egaroucid,
-    ai_greedy,
-    ai_heuristic,
-    ai_random,
-    get_function_source,
-)
-from othello.types import T_PLAYER_FN
+from alpha_othello.othello.ai import get_function_source
 
 
 class Evaluator(ABC):
@@ -33,7 +26,7 @@ class OthelloDockerEvaluator(Evaluator):
         cpu_limit: str,
         ais: list[T_PLAYER_FN],
         eval_script_path: Path,
-        egaroucid_exe_path: Path,
+        win_rate_threshold: float = 0.9,
         n_games: int = 100,
         size: int = 6,
         time_limit_ms: int = 20,
@@ -46,13 +39,15 @@ class OthelloDockerEvaluator(Evaluator):
         self.n_games = n_games
         self.size = size
         self.time_limit_ms = time_limit_ms
+        self.win_rate_threshold = win_rate_threshold
 
         self._start_container()
         self._cp(eval_script_path, Path("/app/eval.py"))
 
         ai_completions = [get_function_source(ai) for ai in ais]
         self.opponents = [
-            self.add_ai(i, completion) for i, completion in enumerate(ai_completions, start=1)
+            self.add_ai(i, completion)
+            for i, completion in enumerate(ai_completions, start=1)
         ]
 
     def __del__(self):
@@ -90,9 +85,8 @@ class OthelloDockerEvaluator(Evaluator):
             score = max(0, score)
             scores.append(score)
 
-            # need 90% to progress to the next oppoenent
-            win_rate_threshold = 0.9
-            if score < win_rate_threshold - (1 - win_rate_threshold) * self.n_games * 2:
+            threshold = (2 * self.win_rate_threshold - 1) * self.n_games * 2
+            if score < threshold:
                 break
 
         print(f"Scores: {scores}")

@@ -13,7 +13,16 @@ from alpha_othello.llm import (
     generate_prompt,
     get_llm_output,
 )
-from alpha_othello.othello.ai import ai_greedy, ai_heuristic, ai_random, ai_egaroucid, get_function_source
+from alpha_othello.othello.ai import (
+    ai_egaroucid_easy,
+    ai_egaroucid_hard,
+    ai_egaroucid_med,
+    ai_greedy,
+    ai_heuristic,
+    ai_random,
+    get_function_source,
+)
+
 
 def get_api_key() -> str:
     secret_path = Path("secret.txt")
@@ -97,7 +106,9 @@ def main():
     db = Database(f"sqlite:///othello_{size}.db")
 
     if not db.get_topk_completion_ids(1):
-        completion_id = db.store_completion(get_function_source(ai_random), "Randomly selects a move", [])
+        completion_id = db.store_completion(
+            get_function_source(ai_random), "Randomly selects a move", []
+        )
         db.store_score(0, completion_id)
 
     # llm = "meta-llama/llama-3.3-8b-instruct:free"
@@ -112,9 +123,15 @@ def main():
         docker_image="python-othello:latest",
         memory_limit="1g",
         cpu_limit="1",
-        ais=[ai_random, ai_greedy, ai_heuristic, ai_egaroucid],
+        ais=[
+            ai_random,
+            ai_greedy,
+            ai_heuristic,
+            ai_egaroucid_easy,
+            ai_egaroucid_med,
+            ai_egaroucid_hard,
+        ],
         eval_script_path=Path("src/alpha_othello/othello/eval.py"),
-        egaroucid_exe_path=Path("Egaroucid4/src/egaroucid4.out"),
         n_games=50,
         size=size,
         time_limit_ms=time_limit_ms,

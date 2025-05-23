@@ -63,18 +63,13 @@ def print_results(results):
 egaroucid_exe_path = Path("/app/Egaroucid4/src/egaroucid4.out")
 
 
-def init_egaroucid_ai(
-    exe_path: Path, player: Player, depth: int = 8, final_depth: int = 12
-):
+def init_egaroucid_ai(exe_path: Path):
     ai_exe = subprocess.Popen(
         exe_path.absolute(),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         cwd=exe_path.parent,
     )
-    lines = [player.value, depth, final_depth]
-    ai_exe.stdin.writelines([f"{x}\n".encode("utf-8") for x in lines])
-    ai_exe.stdin.flush()
     return ai_exe
 
 
@@ -85,6 +80,25 @@ def board_to_egaroucid_str(board) -> str:
             grid_str += "0" if board[i][j][0] else "1" if board[i][j][1] else "."
         grid_str += "\n"
     return grid_str
+
+
+def _ai_egaroucid(board: T_BOARD, player: Player, clock: T_CLOCK, depth=0, final_depth=0) -> T_SQUARE:
+    if "ai_exe" in globals():
+        global ai_exe
+    else:
+        global ai_exe
+        ai_exe = init_egaroucid_ai(egaroucid_exe_path)
+
+    grid_str = board_to_egaroucid_str(board)
+    ai_exe.stdin.write(grid_str.encode("utf-8"))
+    ai_exe.stdin.flush()
+    ai_exe.stdin.write(f"{player.value}\n".encode("utf-8"))
+    ai_exe.stdin.write(f"{depth}\n".encode("utf-8"))
+    ai_exe.stdin.write(f"{final_depth}\n".encode("utf-8"))
+    ai_exe.stdin.flush()
+
+    y, x, val = [float(elem) for elem in ai_exe.stdout.readline().decode().split()]
+    return int(y), int(x)
 
 
 def main():

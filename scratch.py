@@ -15,7 +15,10 @@ from tqdm.auto import tqdm, trange
 
 from alpha_othello.database.database import Database
 from alpha_othello.othello.ai import (
-    ai_egaroucid,
+    ai_egaroucid_easy,
+    ai_egaroucid_med,
+    ai_egaroucid_hard,
+    _ai_egaroucid,
     ai_greedy,
     ai_heuristic,
     ai_minimax,
@@ -65,15 +68,14 @@ evaluator = OthelloDockerEvaluator(
     docker_image="python-othello",
     memory_limit="1g",
     cpu_limit="1",
-    ais=[ai_random, ai_greedy, ai_minimax, ai_heuristic, ai_egaroucid],
+    ais=[ai_random, ai_greedy, ai_minimax, ai_heuristic, ai_egaroucid_easy, ai_egaroucid_med, ai_egaroucid_hard],
     eval_script_path=Path("src/alpha_othello/othello/eval.py"),
-    egaroucid_exe_path=Path("Egaroucid4/src/egaroucid4.out"),
     n_games=50,
     size=8,
     time_limit_ms=999,
 )
 
-evaluator.evaluate(get_function_source(ai_egaroucid))
+evaluator.evaluate(get_function_source(ai_egaroucid_hard))
 
 
 # %%
@@ -118,19 +120,26 @@ def run_tournament(
     return results
 
 
-ais = {
-    "random": ai_random,
-    "greedy": ai_greedy,
-    "minimax": ai_minimax,
-    # "mobility": ai_mobility,
-    # "parity": ai_parity,
-    "heuristic": ai_heuristic,
-    "egaroucid": ai_egaroucid,
+ais = {}
+ais |= {
+    f"({depth}, {final_depth})": partial(_ai_egaroucid, depth=depth, final_depth=final_depth)
+    for depth in [2, 4, 8, 16]
+    for final_depth in [2, 4, 8, 16]
+    if depth <= final_depth
 }
+# ais |= {
+#     "random": ai_random,
+#     "greedy": ai_greedy,
+#     "minimax": ai_minimax,
+#     # "mobility": ai_mobility,
+#     # "parity": ai_parity,
+#     "heuristic": ai_heuristic,
+#     "egaroucid": ai_egaroucid,
+# }
 # ais |= {f"ai_{id}": globals()[f"ai_{id}"] for id in topk_ids}
 print(ais)
 
-results = run_tournament(ais, size=8, n_games_per_pair=20, time_limit_ms=9999)
+results = run_tournament(ais, size=8, n_games_per_pair=20, time_limit_ms=999)
 
 # %%
 df = pd.DataFrame(

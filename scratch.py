@@ -12,6 +12,7 @@ import numpy as np
 from scipy.optimize import minimize
 from tqdm.auto import trange
 from alpha_othello.database.database import Database
+from functools import partial
 
 from alpha_othello.othello.ai import (
     ai_greedy,
@@ -20,35 +21,40 @@ from alpha_othello.othello.ai import (
     ai_mobility,
     ai_parity,
     ai_random,
+    ai_egaroucid,
 )
 
 # %%
-# Get topk completions from the database
-db = Database("sqlite:///othello_6.db")
-topk = 10
-topk_ids = db.get_topk_completion_ids(topk)
-topk_completions = [db.get_completion(completion_id) for completion_id in topk_ids]
+# # Get topk completions from the database
+# db = Database("sqlite:///othello_6.db")
+# topk = 10
+# topk_ids = db.get_topk_completion_ids(topk)
+# topk_completions = [db.get_completion(completion_id) for completion_id in topk_ids]
 
-# Write the completions to a file
-with open("topk_ais.py", "w") as f:
-    f.write("""\
-import numpy as np
-from othello.state import (
-    get_flips,
-    get_legal_squares,
-    get_size,
-    is_empty,
-    is_legal_square,
-)
-from othello.types import T_BOARD, T_CLOCK, T_SQUARE, Player
+# # Write the completions to a file
+# with open("topk_ais.py", "w") as f:
+#     f.write("""\
+# import numpy as np
+# from othello.state import (
+#     get_flips,
+#     get_legal_squares,
+#     get_size,
+#     is_empty,
+#     is_legal_square,
+# )
+# from othello.types import T_BOARD, T_CLOCK, T_SQUARE, Player
 
 
-""")
-    for id, completion in zip(topk_ids, topk_completions):
-        code = f"def ai_{id}(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:\n"
-        code += completion
-        code += "\n\n"
-        f.write(code)
+# """)
+#     for id, completion in zip(topk_ids, topk_completions):
+#         code = f"def ai_{id}(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:\n"
+#         code += completion
+#         code += "\n\n"
+#         f.write(code)
+
+
+# from topk_ais import *
+
 
 # %%
 from multiprocess import Pool
@@ -93,21 +99,20 @@ def run_tournament(
     return results
 
 
-from topk_ais import *
-from functools import partial
 
-ais = {f"ai_{id}": globals()[f"ai_{id}"] for id in topk_ids}
-print(ais)
-
-ais |= {
+ais = {
     "random": ai_random,
     "greedy": ai_greedy,
     "minimax": ai_minimax,
-    "mobility": ai_mobility,
-    "parity": ai_parity,
+    # "mobility": ai_mobility,
+    # "parity": ai_parity,
     "heuristic": ai_heuristic,
+    "egaroucid": ai_egaroucid,
 }
-results = run_tournament(ais, size=6, n_games_per_pair=100, time_limit_ms=10)
+# ais |= {f"ai_{id}": globals()[f"ai_{id}"] for id in topk_ids}
+print(ais)
+
+results = run_tournament(ais, size=8, n_games_per_pair=50, time_limit_ms=9999)
 
 # %%
 df = pd.DataFrame(

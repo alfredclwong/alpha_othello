@@ -27,7 +27,7 @@ def ai_minimax(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
                 new_board[move] = player
                 for fx, fy in flips:
                     new_board[fx, fy] = player
-                eval_score, _ = minimax(new_board, not player, depth - 1, False)
+                eval_score, _ = minimax(new_board, ~player, depth - 1, False)
                 if eval_score > max_eval:
                     max_eval = eval_score
                     best_move = move
@@ -40,7 +40,7 @@ def ai_minimax(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
                 new_board[move] = player
                 for fx, fy in flips:
                     new_board[fx, fy] = player
-                eval_score, _ = minimax(new_board, not player, depth - 1, True)
+                eval_score, _ = minimax(new_board, ~player, depth - 1, True)
                 if eval_score < min_eval:
                     min_eval = eval_score
                     best_move = move

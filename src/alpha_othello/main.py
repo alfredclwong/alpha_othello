@@ -1,134 +1,151 @@
-# Components
-#  1. Prompt generator
-#  2. AI generator
-#  3. AI evaluator
-#  4. Results database
-# Routing
-#  1. 4 -> 1: Use results (and skeleton) to generate an evolutionary prompt
-#  2. 1 -> 2: Use prompt to generate an AI (and reasoning)
-#  3. 2 -> 3: Score the AI
-#  4. 3 -> 4: Store AI scores (and reasoning)
-# For now, don't generate reasoning
-
 import inspect
 from pathlib import Path
+from typing import Optional
 
-from othello.types import Player
+import pygments
+from pygments.formatters import TerminalFormatter
+from pygments.lexers import PythonLexer
 
-from alpha_othello.database import SQLiteDatabase
-from alpha_othello.othello.ai import ai_greedy, ai_heuristic, ai_random
-from alpha_othello.othello.docker import play_in_docker
-from alpha_othello.workers import (
-    extract_completion,
+from alpha_othello.database.database import Database
+from alpha_othello.evaluate import Evaluator, OthelloDockerEvaluator
+from alpha_othello.llm import (
+    extract_tagged_text,
     generate_prompt,
     get_llm_output,
 )
+from alpha_othello.othello.ai import ai_greedy, ai_heuristic, ai_random
 
 
-def main():
-    size = 6
-    max_tokens = 2000
-    n_generations_per_llm = 3
-
+def get_api_key() -> str:
     secret_path = Path("secret.txt")
     with open(secret_path, "r") as f:
         api_key = f.read().strip()
+    return api_key
+
+
+def get_function_source(func):
+    """Get the source code of a function."""
+    source = inspect.getsource(func)
+    # Remove the first line (the function definition)
+    source = "\n".join(source.splitlines()[1:])
+    return source
+
+
+def evolve(
+    db: Database,
+    llm: str,
+    api_key: str,
+    max_tokens: Optional[int],
+    temperature: float,
+    skeleton: str,
+    task: str,
+    k: int,
+    evaluator: Evaluator,
+):
+    """Apply an evolutionary step to the database.
+        1. Get topk inspirations from previous completions
+        2. Generate a prompt from the inspirations
+        3. Pass the prompt to an LLM to generate a new reasoning/completion pair
+        5. Score the new completion within a docker container
+        6. Only store the completion if it is better than the previous ones
+
+    Possible improvements:
+        1. Use a bigger LLM to generate reasoning, then use a smaller LLM to generate the completion
+        2. Use a bigger LLM to seed new explorative completions every n generations
+        3. Use a bigger LLM to improve the skeleton/task
+        4. Use explorative completion to separate islands of completions that evolve in parallel
+        5. Decouple completion and scoring
+        6. Change to diff models to generate completions
+    """
+    topk_completion_ids = db.get_topk_completion_ids(k)
+    inspirations = [
+        db.get_completion(completion_id) for completion_id in topk_completion_ids
+    ]
+    scores = [db.get_score(completion_id) for completion_id in topk_completion_ids]
+    prompt = generate_prompt(skeleton, inspirations, scores, task)
+
+    llm_output = get_llm_output(prompt, llm, api_key, max_tokens, temperature)
+    reasoning = extract_tagged_text(llm_output, "REASONING")
+    completion = extract_tagged_text(llm_output, "COMPLETION")
+    if not completion:
+        print("No completion found")
+        print("LLM output:")
+        print(llm_output)
+        return
+    # completion = get_function_source(ai_heuristic)
+
+    print(f"Reasoning:\n{reasoning}")
+    highlighted = pygments.highlight(completion, PythonLexer(), TerminalFormatter())
+    print(f"Completion:\n{highlighted}")
+
+    if inspirations:
+        opponent_completion = inspirations[0]
+        opponent_score = scores[0]
+    else:
+        opponent_completion = get_function_source(ai_random)
+        opponent_score = 0
+    score = evaluator.evaluate(completion, opponent_completion)
+    if score > 0:
+        completion_id = db.store_completion(completion, reasoning, topk_completion_ids)
+        db.store_score(opponent_score + score, completion_id)
+    print(f"Score: {score}")
+
+
+def main():
+    temperature = 0.7
+    size = 6
+    time_limit_ms = 10
+
+    max_tokens = 2000
+    topk_completions = 3
+    api_key = get_api_key()
 
     skeleton_path = Path("src/alpha_othello/othello/skeleton.txt")
     with open(skeleton_path, "r") as f:
         skeleton = f.read()
+    task = (
+        f"Complete the ai() function body to return the best move on a {size}x{size} Othello board. "
+        f"The clock represents the time left for each player to complete all of their remaining moves. "
+        f"Each player starts with {time_limit_ms} milliseconds. If they run out of time, they lose. "
+    )
 
-    task = f"Implement the AI function to play the best possible move in {size}x{size} Othello."
+    db = Database(f"sqlite:///othello_{size}.db")
 
-    db = SQLiteDatabase("sqlite:///othello.db")
-
-    llm_ids = [
-        db.store_llm("meta-llama/llama-3.3-8b-instruct:free"),
-    ]
-
-    ais = [
-        ai_random,
-        ai_greedy,
-        ai_heuristic,
-    ]
-
-    for ai in ais:
-        code = inspect.getsource(ai)
-        completion = "\n".join(code.splitlines()[1:])
-        completion_id = db.store_completion(completion, 1, 1)
+    if not db.get_topk_completion_ids(1):
+        completion_id = db.store_completion(get_function_source(ai_random), "Randomly selects a move", [])
         db.store_score(0, completion_id)
 
-    k = 2
-    top_completion_ids = db.get_topk_completions(k)
-    inspirations = [
-        db.get_completion(completion_id) for completion_id in top_completion_ids
-    ]
-    scores = [db.get_score(completion_id) for completion_id in top_completion_ids]
-    inspirations, scores = zip(
-        *[
-            (insp, score)
-            for insp, score in zip(inspirations, scores)
-            if insp is not None and score is not None
-        ]
+    # llm = "meta-llama/llama-3.3-8b-instruct:free"
+    # llm = "deepseek/deepseek-chat-v3-0324:free"
+    # llm = "google/gemini-2.0-flash-exp:free"
+    # llm = "meta-llama/llama-4-maverick:free"
+    # llm = "qwen/qwen3-235b-a22b:free"  # super slow
+    llm = "google/gemma-3-27b-it:free"
+
+    evaluator = OthelloDockerEvaluator(
+        name="othello",
+        docker_image="python-othello:latest",
+        memory_limit="1g",
+        cpu_limit="1",
+        eval_script_path=Path("src/alpha_othello/othello/eval.py"),
+        n_games=50,
+        size=size,
+        time_limit_ms=time_limit_ms,
     )
-    inspirations = list(inspirations)
-    scores = list(scores)
-    prompt = generate_prompt(skeleton, inspirations, scores, task)
-    prompt_id = db.store_prompt(prompt, top_completion_ids)
 
-    print(prompt)
-
-    for llm_id in llm_ids:
-        llm = db.get_llm(llm_id)
-        if llm is None:
-            continue
-
-        for _ in range(n_generations_per_llm):
-            # llm_output = get_llm_output(prompt, llm, api_key, max_tokens)
-            # completion = extract_completion(llm_output)
-            completion = db.get_completion(3)
-            if completion is None:
-                continue
-            completion_id = db.store_completion(completion, llm_id, prompt_id)
-
-            opponent_completion = db.get_completion(1)
-            if opponent_completion is None:
-                continue
-
-            results_as_black = play_in_docker(
-                completion,
-                opponent_completion,
-                n_games=100,
-                size=size,
-                time_control_millis=20,
-            )
-
-            results_as_white = play_in_docker(
-                opponent_completion,
-                completion,
-                n_games=100,
-                size=size,
-                time_control_millis=20,
-            )
-
-            score = 0
-            for (result, reason), count in results_as_black.items():
-                if result == str(Player.BLACK):
-                    score += count
-                elif result == str(Player.WHITE):
-                    score -= count
-                elif result == "None":
-                    score += 0
-
-            for (result, reason), count in results_as_white.items():
-                if result == str(Player.BLACK):
-                    score -= count
-                elif result == str(Player.WHITE):
-                    score += count
-                elif result == "None":
-                    score += 0
-
-            score_id = db.store_score(score, completion_id)
+    for i in range(1000):
+        print(f"Generation {i}")
+        evolve(
+            db,
+            llm,
+            api_key,
+            max_tokens,
+            temperature,
+            skeleton,
+            task,
+            topk_completions,
+            evaluator,
+        )
 
 
 if __name__ == "__main__":

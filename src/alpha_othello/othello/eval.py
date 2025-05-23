@@ -3,8 +3,10 @@
 # results are printed to stdout
 
 import argparse
+import subprocess
 from collections import Counter
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 from othello.game import Game
@@ -56,6 +58,33 @@ def print_results(results):
     for (result, reason), count in results.items():
         print(f"{result},{reason},{count}")
     print("</RESULTS>")
+
+
+egaroucid_exe_path = Path("/app/Egaroucid4/src/egaroucid4.out")
+
+
+def init_egaroucid_ai(
+    exe_path: Path, player: Player, depth: int = 8, final_depth: int = 12
+):
+    ai_exe = subprocess.Popen(
+        exe_path.absolute(),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        cwd=exe_path.parent,
+    )
+    lines = [player.value, depth, final_depth]
+    ai_exe.stdin.writelines([f"{x}\n".encode("utf-8") for x in lines])
+    ai_exe.stdin.flush()
+    return ai_exe
+
+
+def board_to_egaroucid_str(board) -> str:
+    grid_str = ""
+    for i in range(board.shape[0]):
+        for j in range(board.shape[1]):
+            grid_str += "0" if board[i][j][0] else "1" if board[i][j][1] else "."
+        grid_str += "\n"
+    return grid_str
 
 
 def main():

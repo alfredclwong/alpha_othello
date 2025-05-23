@@ -7,6 +7,8 @@ import requests
 def generate_prompt(
     skeleton: str, inspirations: list[str], scores: list[int], task: str
 ) -> str:
+    # TODO add IDs such that LLM knows how many attempts it has made
+    # TODO probabilistic prompt templates (e.g. tweak vs explore)
     """Return a generated prompt using the skeleton and the code IDs.
 
     @param skeleton: The skeleton is the code that should be completed.

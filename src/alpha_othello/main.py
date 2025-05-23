@@ -13,22 +13,13 @@ from alpha_othello.llm import (
     generate_prompt,
     get_llm_output,
 )
-from alpha_othello.othello.ai import ai_greedy, ai_heuristic, ai_random
-
+from alpha_othello.othello.ai import ai_greedy, ai_heuristic, ai_random, ai_egaroucid, get_function_source
 
 def get_api_key() -> str:
     secret_path = Path("secret.txt")
     with open(secret_path, "r") as f:
         api_key = f.read().strip()
     return api_key
-
-
-def get_function_source(func):
-    """Get the source code of a function."""
-    source = inspect.getsource(func)
-    # Remove the first line (the function definition)
-    source = "\n".join(source.splitlines()[1:])
-    return source
 
 
 def evolve(
@@ -78,23 +69,17 @@ def evolve(
     highlighted = pygments.highlight(completion, PythonLexer(), TerminalFormatter())
     print(f"Completion:\n{highlighted}")
 
-    if inspirations:
-        opponent_completion = inspirations[0]
-        opponent_score = scores[0]
-    else:
-        opponent_completion = get_function_source(ai_random)
-        opponent_score = 0
-    score = evaluator.evaluate(completion, opponent_completion)
+    score = evaluator.evaluate(completion)
     if score > 0:
         completion_id = db.store_completion(completion, reasoning, topk_completion_ids)
-        db.store_score(opponent_score + score, completion_id)
+        db.store_score(score, completion_id)
     print(f"Score: {score}")
 
 
 def main():
     temperature = 0.7
-    size = 6
-    time_limit_ms = 10
+    size = 8
+    time_limit_ms = 999
 
     max_tokens = 2000
     topk_completions = 3
@@ -127,7 +112,9 @@ def main():
         docker_image="python-othello:latest",
         memory_limit="1g",
         cpu_limit="1",
+        ais=[ai_random, ai_greedy, ai_heuristic, ai_egaroucid],
         eval_script_path=Path("src/alpha_othello/othello/eval.py"),
+        egaroucid_exe_path=Path("Egaroucid4/src/egaroucid4.out"),
         n_games=50,
         size=size,
         time_limit_ms=time_limit_ms,

@@ -7,6 +7,14 @@ from pathlib import Path
 from othello.types import Player
 
 from alpha_othello.llm import extract_tagged_text
+from alpha_othello.othello.ai import (
+    ai_egaroucid,
+    ai_greedy,
+    ai_heuristic,
+    ai_random,
+    get_function_source,
+)
+from othello.types import T_PLAYER_FN
 
 
 class Evaluator(ABC):
@@ -23,7 +31,9 @@ class OthelloDockerEvaluator(Evaluator):
         docker_image: str,
         memory_limit: str,
         cpu_limit: str,
+        ais: list[T_PLAYER_FN],
         eval_script_path: Path,
+        egaroucid_exe_path: Path,
         n_games: int = 100,
         size: int = 6,
         time_limit_ms: int = 20,
@@ -31,7 +41,6 @@ class OthelloDockerEvaluator(Evaluator):
         # TODO multiple docker containers in parallel
         self.name = name
         self.docker_image = docker_image
-        self.eval_script_path = eval_script_path
         self.memory_limit = memory_limit
         self.cpu_limit = cpu_limit
         self.n_games = n_games
@@ -39,37 +48,55 @@ class OthelloDockerEvaluator(Evaluator):
         self.time_limit_ms = time_limit_ms
 
         self._start_container()
-        self._cp(self.eval_script_path, Path("/app/eval.py"))
+        self._cp(eval_script_path, Path("/app/eval.py"))
+
+        ai_completions = [get_function_source(ai) for ai in ais]
+        self.opponents = [
+            self.add_ai(i, completion) for i, completion in enumerate(ai_completions, start=1)
+        ]
 
     def __del__(self):
         self._stop_container()
 
-    def evaluate(self, completion: str, opponent: str) -> int:
-        score = 0
+    def evaluate(self, completion: str) -> int:
+        scores = []
 
-        completion_path = self.add_ai(1, completion)
-        opponent_path = self.add_ai(2, opponent)
-        pairs = [
-            (completion_path, opponent_path, 1),
-            (opponent_path, completion_path, -1),
-        ]
+        completion_path = self.add_ai(0, completion)
 
-        for ai1_path, ai2_path, sign in pairs:
-            docker_stdout = self._play(ai1_path, ai2_path)
-            results = extract_tagged_text(docker_stdout, "RESULTS")
-            if not results:
-                # Usually because the AI code is invalid
-                print(docker_stdout)
-                return -2 * self.n_games
-            print(results)
-            for line in results.strip().splitlines():
-                winner, reason, count = line.split(",")
-                # Black = 1, White = -1, Draw = 0
-                if winner == Player.BLACK.name:
-                    score += int(count) * sign
-                elif winner == Player.WHITE.name:
-                    score -= int(count) * sign
-        return score
+        for opponent_path in self.opponents:
+            score = 0
+
+            pairs = [
+                (completion_path, opponent_path, 1),
+                (opponent_path, completion_path, -1),
+            ]
+
+            for ai1_path, ai2_path, sign in pairs:
+                docker_stdout = self._play(ai1_path, ai2_path)
+                results = extract_tagged_text(docker_stdout, "RESULTS")
+                if not results:
+                    # Usually because the AI code is invalid
+                    print(docker_stdout)
+                    return -2 * self.n_games
+                print(results)
+                for line in results.strip().splitlines():
+                    winner, reason, count = line.split(",")
+                    # Black = 1, White = -1, Draw = 0
+                    if winner == Player.BLACK.name:
+                        score += int(count) * sign
+                    elif winner == Player.WHITE.name:
+                        score -= int(count) * sign
+
+            score = max(0, score)
+            scores.append(score)
+
+            # need 90% to progress to the next oppoenent
+            win_rate_threshold = 0.9
+            if score < win_rate_threshold - (1 - win_rate_threshold) * self.n_games * 2:
+                break
+
+        print(f"Scores: {scores}")
+        return sum(scores)
 
     def add_ai(self, id: int, completion: str) -> Path:
         with tempfile.NamedTemporaryFile(delete=False) as temp_file:

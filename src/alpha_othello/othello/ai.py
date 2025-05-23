@@ -1,9 +1,19 @@
+import inspect
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 from othello.state import get_flips, get_legal_squares, get_size
 from othello.types import T_BOARD, T_CLOCK, T_SQUARE, Player
+
+
+def get_function_source(func):
+    """Get the source code of a function."""
+    source = inspect.getsource(func)
+    # Remove the first line (the function definition)
+    source = "\n".join(source.splitlines()[1:])
+    return source
 
 
 def ai_random(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
@@ -17,13 +27,35 @@ def ai_greedy(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
 
 
 def ai_minimax(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
-    def score(board, player):
-        return np.sum(board == player) - np.sum(board == ~player)
+    size = get_size(board)
 
-    def minimax(board, player, depth, maximizing):
+    def score_board(_board: T_BOARD, _player: Player) -> float:
+        disc_diff = (
+            _board[..., _player.value].sum() - _board[..., (~_player).value].sum()
+        )
+        mobility_diff = len(get_legal_squares(_board, _player)) - len(
+            get_legal_squares(_board, ~_player)
+        )
+        corners = [
+            (0, 0),
+            (0, size - 1),
+            (size - 1, 0),
+            (size - 1, size - 1),
+        ]
+        corner_diff = sum(
+            1
+            if _board[*corner, _player.value]
+            else -1
+            if _board[*corner, (~_player).value]
+            else 0
+            for corner in corners
+        )
+        return 10 * disc_diff + 20 * mobility_diff + 100 * corner_diff
+
+    def minimax(board, player, depth, maximizing) -> tuple[float, Optional[T_SQUARE]]:
         moves = get_legal_squares(board, player)
         if depth == 0 or not moves:
-            return score(board, player), None
+            return score_board(board, player), None
         best_move = None
         if maximizing:
             max_eval = -float("inf")
@@ -52,7 +84,7 @@ def ai_minimax(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
                     best_move = move
             return min_eval, best_move
 
-    _, move = minimax(board, player, depth=3, maximizing=True)
+    _, move = minimax(board, player, depth=1, maximizing=True)
     if move is None:
         raise ValueError("No valid moves available")
     return move
@@ -148,7 +180,7 @@ egaroucid_exe_path = Path("./Egaroucid4/src/egaroucid4.out")
 
 
 def init_egaroucid_ai(
-    exe_path: Path, player: Player, depth: int = 8, final_depth: int = 12
+    exe_path: Path, player: Player, depth: int = 2, final_depth: int = 4
 ):
     ai_exe = subprocess.Popen(
         exe_path.absolute(),
@@ -171,7 +203,7 @@ def board_to_egaroucid_str(board) -> str:
     return grid_str
 
 
-def ai_egaroucid(board, player, clock):
+def ai_egaroucid(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
     if player == Player.BLACK:
         if "ai_exe_black" in globals():
             global ai_exe_black

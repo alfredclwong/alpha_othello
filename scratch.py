@@ -1,27 +1,27 @@
 # %%
 import colorsys
 from collections import Counter
+from functools import partial
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.subplots as sp
+from multiprocess import Pool
 from othello.game import Game
 from othello.types import T_PLAYER_FN, Player
-from tqdm.auto import tqdm
-import numpy as np
 from scipy.optimize import minimize
-from tqdm.auto import trange
-from alpha_othello.database.database import Database
-from functools import partial
+from tqdm.auto import tqdm, trange
 
+from alpha_othello.database.database import Database
 from alpha_othello.othello.ai import (
+    ai_egaroucid,
     ai_greedy,
     ai_heuristic,
     ai_minimax,
     ai_mobility,
     ai_parity,
     ai_random,
-    ai_egaroucid,
 )
 
 # %%
@@ -55,11 +55,28 @@ from alpha_othello.othello.ai import (
 
 # from topk_ais import *
 
+# %%
+from alpha_othello.evaluate import OthelloDockerEvaluator
+from pathlib import Path
+from alpha_othello.othello.ai import get_function_source
+
+evaluator = OthelloDockerEvaluator(
+    name="test",
+    docker_image="python-othello",
+    memory_limit="1g",
+    cpu_limit="1",
+    ais=[ai_random, ai_greedy, ai_minimax, ai_heuristic, ai_egaroucid],
+    eval_script_path=Path("src/alpha_othello/othello/eval.py"),
+    egaroucid_exe_path=Path("Egaroucid4/src/egaroucid4.out"),
+    n_games=50,
+    size=8,
+    time_limit_ms=999,
+)
+
+evaluator.evaluate(get_function_source(ai_egaroucid))
+
 
 # %%
-from multiprocess import Pool
-
-
 def game_worker(ai1, ai2, size, time_limit_ms, batch_size=100):
     results = Counter()
     for _ in range(batch_size):
@@ -91,13 +108,14 @@ def run_tournament(
         async_results = []
         for pair in pairs:
             args = (ais[pair[0]], ais[pair[1]], size, time_limit_ms, n_games_per_pair)
-            async_result = pool.apply_async(game_worker, args, callback=partial(update, pair=pair))
+            async_result = pool.apply_async(
+                game_worker, args, callback=partial(update, pair=pair)
+            )
             async_results.append(async_result)
         # Wait for all tasks to finish
         for async_result in async_results:
             async_result.wait()
     return results
-
 
 
 ais = {
@@ -112,7 +130,7 @@ ais = {
 # ais |= {f"ai_{id}": globals()[f"ai_{id}"] for id in topk_ids}
 print(ais)
 
-results = run_tournament(ais, size=8, n_games_per_pair=50, time_limit_ms=9999)
+results = run_tournament(ais, size=8, n_games_per_pair=20, time_limit_ms=9999)
 
 # %%
 df = pd.DataFrame(

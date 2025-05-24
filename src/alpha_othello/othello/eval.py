@@ -90,11 +90,10 @@ def _ai_egaroucid(board: T_BOARD, player: Player, clock: T_CLOCK, depth=0, final
         ai_exe = init_egaroucid_ai(egaroucid_exe_path)
 
     grid_str = board_to_egaroucid_str(board)
-    ai_exe.stdin.write(grid_str.encode("utf-8"))
-    ai_exe.stdin.flush()
     ai_exe.stdin.write(f"{player.value}\n".encode("utf-8"))
     ai_exe.stdin.write(f"{depth}\n".encode("utf-8"))
     ai_exe.stdin.write(f"{final_depth}\n".encode("utf-8"))
+    ai_exe.stdin.write(grid_str.encode("utf-8"))
     ai_exe.stdin.flush()
 
     y, x, val = [float(elem) for elem in ai_exe.stdout.readline().decode().split()]
@@ -130,3 +129,8 @@ if __name__ == "__main__":
         main()
     except Exception as e:
         print(f"Error: {e}")
+        print(e.__traceback__)
+        raise
+    finally:
+        if "ai_exe" in globals():
+            ai_exe.kill()

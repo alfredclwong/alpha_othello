@@ -102,7 +102,8 @@ class OthelloDockerEvaluator(Evaluator):
         return ai_path
 
     def _play(self, black: Path, white: Path):
-        result = subprocess.run(
+        try:
+            result = subprocess.run(
             [
                 "docker",
                 "exec",
@@ -122,7 +123,14 @@ class OthelloDockerEvaluator(Evaluator):
             ],
             check=True,
             capture_output=True,
-        )
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"Error occurred while running Docker command: {e}")
+            print(f"Command: {e.cmd}")
+            print(f"Return code: {e.returncode}")
+            print(f"Output: {e.output.decode('utf-8')}")
+            print(f"Error output: {e.stderr.decode('utf-8')}")
+            raise
         return result.stdout.decode("utf-8")
 
     def _start_container(self):
@@ -180,3 +188,4 @@ class OthelloDockerEvaluator(Evaluator):
             ],
             check=True,
         )
+        print(f"Copied {src} to {dest} in Docker container.")

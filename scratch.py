@@ -77,6 +77,8 @@ evaluator = OthelloDockerEvaluator(
 
 evaluator.evaluate(get_function_source(ai_egaroucid_hard))
 
+# %%
+del evaluator
 
 # %%
 def game_worker(ai1, ai2, size, time_limit_ms, batch_size=100):
@@ -127,19 +129,19 @@ ais |= {
     for final_depth in [2, 4, 8, 16]
     if depth <= final_depth
 }
-# ais |= {
+ais |= {
 #     "random": ai_random,
-#     "greedy": ai_greedy,
+    "greedy": ai_greedy,
 #     "minimax": ai_minimax,
 #     # "mobility": ai_mobility,
 #     # "parity": ai_parity,
-#     "heuristic": ai_heuristic,
+    "heuristic": ai_heuristic,
 #     "egaroucid": ai_egaroucid,
-# }
+}
 # ais |= {f"ai_{id}": globals()[f"ai_{id}"] for id in topk_ids}
 print(ais)
 
-results = run_tournament(ais, size=8, n_games_per_pair=20, time_limit_ms=999)
+results = run_tournament(ais, size=8, n_games_per_pair=10, time_limit_ms=9999)
 
 # %%
 df = pd.DataFrame(
@@ -233,7 +235,8 @@ res = minimize(
     neg_log_likelihood_vec,
     init_ratings,
     callback=callback,
-    options={"maxiter": n_iter, "disp": False},
+    jac="2-point",
+    options={"maxiter": n_iter, "disp": False, "gtol": 1e-6, "eps": 1e-3},
 )
 pbar.close()
 
@@ -262,6 +265,14 @@ fig_ratings.update_layout(
 )
 fig_ratings.show()
 ratings
+
+# %%
+# Save plot
+fig_ratings.write_html("ratings_history.html")
+
+# Save ratings
+ratings_df = pd.DataFrame(ratings.items(), columns=["AI", "Rating"])
+ratings_df.to_csv("ratings.csv", index=False)
 
 
 # %%

@@ -100,7 +100,7 @@ def main():
     task = (
         f"Complete the ai() function body to return the best move on a {size}x{size} Othello board. "
         f"The clock represents the time left for each player to complete all of their remaining moves. "
-        f"Each player starts with {time_limit_ms} milliseconds. If they run out of time, they lose. "
+        f"Each player starts with {time_limit_ms} milliseconds. If they run out of time, they lose."
     )
 
     db = Database(f"sqlite:///othello_{size}.db")

@@ -28,6 +28,16 @@ from alpha_othello.othello.ai import (
 )
 
 # %%
+size = 8
+time_limit_ms = 9999
+task = (
+        f"Complete the ai() function body to return the best move on a {size}x{size} Othello board. "
+        f"The clock represents the time left for each player to complete all of their remaining moves. "
+        f"Each player starts with {time_limit_ms} milliseconds. If they run out of time, they lose."
+    )
+print(task)
+
+# %%
 # # Get topk completions from the database
 # db = Database("sqlite:///othello_6.db")
 # topk = 10
@@ -57,28 +67,6 @@ from alpha_othello.othello.ai import (
 
 
 # from topk_ais import *
-
-# %%
-from alpha_othello.evaluate import OthelloDockerEvaluator
-from pathlib import Path
-from alpha_othello.othello.ai import get_function_source
-
-evaluator = OthelloDockerEvaluator(
-    name="test",
-    docker_image="python-othello",
-    memory_limit="1g",
-    cpu_limit="1",
-    ais=[ai_random, ai_greedy, ai_minimax, ai_heuristic, ai_egaroucid_easy, ai_egaroucid_med, ai_egaroucid_hard],
-    eval_script_path=Path("src/alpha_othello/othello/eval.py"),
-    n_games=50,
-    size=8,
-    time_limit_ms=999,
-)
-
-evaluator.evaluate(get_function_source(ai_egaroucid_hard))
-
-# %%
-del evaluator
 
 # %%
 def game_worker(ai1, ai2, size, time_limit_ms, batch_size=100):
@@ -125,12 +113,17 @@ def run_tournament(
 ais = {}
 ais |= {
     f"({depth}, {final_depth})": partial(_ai_egaroucid, depth=depth, final_depth=final_depth)
-    for depth in [2, 4, 8, 16]
-    for final_depth in [2, 4, 8, 16]
-    if depth <= final_depth
+    # for depth in [2, 4, 8, 16]
+    # for final_depth in [2, 4, 8, 16]
+    # if depth <= final_depth
+    for depth, final_depth in [
+        (2, 2),
+        (8, 8),
+        (4, 16),
+    ]
 }
 ais |= {
-#     "random": ai_random,
+    "random": ai_random,
     "greedy": ai_greedy,
 #     "minimax": ai_minimax,
 #     # "mobility": ai_mobility,
@@ -265,14 +258,6 @@ fig_ratings.update_layout(
 )
 fig_ratings.show()
 ratings
-
-# %%
-# Save plot
-fig_ratings.write_html("ratings_history.html")
-
-# Save ratings
-ratings_df = pd.DataFrame(ratings.items(), columns=["AI", "Rating"])
-ratings_df.to_csv("ratings.csv", index=False)
 
 
 # %%

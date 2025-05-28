@@ -23,8 +23,8 @@ Act as an expert Python developer. Your job is to provide the best possible comp
 a code skeleton. The completion will be appended to the skeleton and the completed code \
 will be scored on its ability to complete a task. Higher scores are better.\
 """
-    skeleton_str = f"<SKELETON>:\n{skeleton}\n</SKELETON>"
-    task_str = f"<TASK>:\n{task}\n</TASK>"
+    task_str = f"<TASK>\n{task}\n</TASK>"
+    skeleton_str = f"<SKELETON>\n{skeleton}\n</SKELETON>"
     # Sort inspirations in ascending order of scores
     # I noticed that the LLM reasons as if the inspirations are iterative improvements
     inspiration_str = """\
@@ -44,7 +44,7 @@ The reasoning should explain how this completion will improve upon previous iter
 The completion will be appended to the skeleton into a single function, so it should not \
 repeat the function signature and it should start with one level of indentation. If you \
 import libraries or define helper functions, make sure to do so within the scope of the \
-function. Make sure that the completion is valid Python code.\
+function and before they are used. Make sure that the completion is valid Python code.\
 """
     parts = [preamble_str, task_str, skeleton_str, inspiration_str, epilogue_str]
     if not inspirations:

@@ -14,6 +14,20 @@
      - Data analysis/visualisation
      - Large infrastructure projects
 
+## Evolutionary Tree Visualisation
+
+To explore the evolution of Othello AIs, see the interactive evolutionary tree below (requires JavaScript):
+
+<details>
+<summary>Click to expand the interactive evolutionary tree</summary>
+
+<!-- EMBEDDED: evolutionary_tree.html -->
+<object type="text/html" data="evolutionary_tree.html" width="100%" height="1200" style="border:1px solid #aaa; min-height:600px;">
+  <a href="https://alfredclwong.github.io/assets/html/evolutionary_tree.html">View the evolutionary tree (interactive HTML)</a>
+</object>
+
+</details>
+
 # Milestones
 1. Task setup
    - [x] Othello https://github.com/alfredclwong/othello

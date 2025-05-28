@@ -3,8 +3,11 @@ import colorsys
 from collections import Counter
 from functools import partial
 
+import matplotlib.pyplot as plt
+import networkx as nx
 import numpy as np
 import pandas as pd
+import plotly.express as px
 import plotly.graph_objects as go
 import plotly.subplots as sp
 from multiprocess import Pool
@@ -12,15 +15,22 @@ from othello.game import Game
 from othello.types import T_PLAYER_FN, Player
 from scipy.optimize import minimize
 from tqdm.auto import tqdm, trange
+from bokeh.models import Circle, HoverTool
+from bokeh.plotting import figure, show, from_networkx, ColumnDataSource
+from bokeh.io import output_notebook, output_file
+from bokeh.models import CustomJS, Div, LabelSet
+from bokeh.layouts import row, column
 
 from alpha_othello.database.database import Database
 from alpha_othello.othello.ai import (
-    ai_egaroucid_easy,
-    ai_egaroucid_med,
-    ai_egaroucid_hard,
     _ai_egaroucid,
+    ai_egaroucid_easy,
+    ai_egaroucid_hard,
+    ai_egaroucid_med,
+    ai_egaroucid_very_hard,
     ai_greedy,
     ai_heuristic,
+    ai_human,
     ai_minimax,
     ai_mobility,
     ai_parity,
@@ -28,22 +38,11 @@ from alpha_othello.othello.ai import (
 )
 
 # %%
-size = 8
-time_limit_ms = 9999
-task = (
-        f"Complete the ai() function body to return the best move on a {size}x{size} Othello board. "
-        f"The clock represents the time left for each player to complete all of their remaining moves. "
-        f"Each player starts with {time_limit_ms} milliseconds. If they run out of time, they lose."
-    )
-print(task)
-
-# %%
 # # Get topk completions from the database
-# db = Database("sqlite:///othello_6.db")
-# topk = 10
+# db = Database("sqlite:///othello_8.db")
+# topk = 1
 # topk_ids = db.get_topk_completion_ids(topk)
 # topk_completions = [db.get_completion(completion_id) for completion_id in topk_ids]
-
 # # Write the completions to a file
 # with open("topk_ais.py", "w") as f:
 #     f.write("""\
@@ -56,17 +55,231 @@ print(task)
 #     is_legal_square,
 # )
 # from othello.types import T_BOARD, T_CLOCK, T_SQUARE, Player
-
-
 # """)
 #     for id, completion in zip(topk_ids, topk_completions):
 #         code = f"def ai_{id}(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:\n"
+#         code += f"    # Score: {db.get_score(id)}\n"
 #         code += completion
 #         code += "\n\n"
 #         f.write(code)
+from topk_ais import *
+
+# %%
+db_path = "sqlite:///othello_8.db"
+db = Database(db_path)
+completion_ids = db.get_all_completion_ids()
+db_df = pd.DataFrame(
+    {
+        "Completion ID": completion_ids,
+        "Completion": [db.get_completion(id) for id in completion_ids],
+        "Reasoning": [db.get_reasoning(id) for id in completion_ids],
+        "Inspirations": [db.get_inspirations(id) for id in completion_ids],
+        "Score": [db.get_score(id) for id in completion_ids],
+    }
+)
+# Filter out completions which were below the topk threshold at any point in time
+k = 3
+topk_scores = db_df["Score"].expanding().apply(lambda x: pd.Series(x).nlargest(k).min())
+db_df = db_df[db_df["Score"] >= topk_scores]
+db_df
 
 
-# from topk_ais import *
+# %%
+# Each node is a completion, and its parents are its inspirations
+def create_evolutionary_tree(df: pd.DataFrame) -> nx.DiGraph:
+    G = nx.DiGraph()
+    for _, row in df.iterrows():
+        completion_id = row["Completion ID"]
+        G.add_node(
+            completion_id,
+            score=row["Score"],
+            size=max(10, row["Score"] * 0.1) * 2,
+            completion=row["Completion"],
+        )
+        for inspiration_id in row["Inspirations"]:
+            if inspiration_id:
+                G.add_edge(inspiration_id, completion_id)
+    return G
+
+
+G = create_evolutionary_tree(db_df)
+print(G.nodes(data=True))
+
+# %%
+# Use graphviz_layout with 'dot' for hierarchical layout, then jitter overlapping nodes
+pos = nx.nx_agraph.graphviz_layout(G, prog="dot", args="-Grankdir=TB")
+
+# Jitter positions to avoid overlapping nodes
+def jitter_positions(pos, min_dist=10) -> dict:
+    # Convert to array for easier manipulation
+    coords = np.array(list(pos.values()))
+    keys = list(pos.keys())
+    for i in range(len(coords)):
+        for j in range(i + 1, len(coords)):
+            dist = np.linalg.norm(coords[i] - coords[j])
+            if dist < min_dist:
+                # Move them apart slightly
+                direction = coords[i] - coords[j]
+                if np.all(direction == 0):
+                    direction = np.random.randn(2)
+                direction = direction / (np.linalg.norm(direction) + 1e-6)
+                shift = direction * (min_dist - dist) / 2
+                coords[i] += shift
+                coords[j] -= shift
+    return {k: tuple(coords[i]) for i, k in enumerate(keys)}
+
+pos = jitter_positions(pos, min_dist=100)
+
+# Use Bokeh to visualise the graph
+# The nodes are sized by their score, with larger nodes having higher scores
+# A text box on the side of the graph shows the full completion text when hovering over a node
+output_notebook()
+height = 1500
+plot = figure(
+    width=150,
+    height=height,
+    title="Evolutionary Tree",
+)
+plot.xgrid.grid_line_color = None
+plot.ygrid.grid_line_color = None
+plot.axis.visible = False
+plot.background_fill_color = "#f0f0f0"
+plot.toolbar_location = None
+
+# Text box for completion text
+completion_div = Div(
+    text="Hover over a node to see the completion.",
+    width=550,
+    height=height,
+    styles={
+        "overflow-x": "auto",
+        "overflow-y": "auto",
+        "margin-top": "0px",
+        "background": "#f9f9f9",
+        "padding": "2px",
+        "font-size": "10px",
+    },
+)
+
+layout = row(plot, completion_div)
+
+# Data for nodes
+hover_color = "#ffcc00"  # Color for hovered node
+default_color = "lightblue"  # Default color for nodes
+source = ColumnDataSource(
+    data={
+        "index": list(G.nodes),
+        "score": [G.nodes[n]["score"] for n in G.nodes],
+        "size": [G.nodes[n]["size"] for n in G.nodes],
+        "completion": [G.nodes[n]["completion"] for n in G.nodes],
+        "fill_color": [default_color] * len(G.nodes),
+    }
+)
+
+nodes = from_networkx(G, pos, scale=1, center=(0, 0))
+nodes.node_renderer.data_source = source
+nodes.node_renderer.glyph = Circle(
+    radius="size", fill_color="fill_color", line_color="black",
+)
+
+# Add a callback to update the Div with the completion text when hovering
+def display_completion() -> CustomJS:
+    return CustomJS(
+        args=dict(source=source, div=completion_div),
+        code=f"""
+            const {{indices}} = cb_data.index;
+            if (indices.length > 0) {{
+                const idx = indices[0];
+
+                // Change color of hovered node
+                const node_renderer = cb_obj.renderers[0];
+                const node_data = node_renderer.data_source;
+                // Reset all nodes to lightblue
+                for (let i = 0; i < node_data.data['index'].length; i++) {{
+                    node_data.data['fill_color'] = node_data.data['fill_color'] || [];
+                    node_data.data['fill_color'][i] = "{default_color}";
+                }}
+                // Highlight hovered node
+                node_data.data['fill_color'][idx] = "{hover_color}";
+                node_data.change.emit();
+
+                const id = source.data['index'][idx];
+                const score = source.data['score'][idx];
+                const completion = source.data['completion'][idx];
+                div.text = "<b>Completion #" + id + ":</b><br>";
+                div.text += "[Score: " + score + "]<br>";
+                div.text += "<pre style='white-space:pre-wrap;'><code class='language-python'>";
+                div.text += completion;
+                div.text += "</code></pre>";
+
+            }}
+        """,
+    )
+
+
+hover_tool = HoverTool(
+    tooltips=[
+        ("Completion ID", "@index"),
+        ("Score", "@score"),
+    ],
+    renderers=[nodes.node_renderer],
+    callback=display_completion(),
+)
+
+# Manually trigger the callback for node 277 (if it exists)
+top_completion_id = db.get_topk_completion_ids(1)[0]
+if top_completion_id in source.data["index"]:
+    idx = source.data["index"].index(top_completion_id)
+    # Simulate hover event by updating the Div
+    completion_id = source.data["index"][idx]
+    score = source.data["score"][idx]
+    completion = source.data["completion"][idx]
+    completion_div.text = (
+        f"<b>Completion #{completion_id}:</b><br>"
+        f"[Score: {score}]<br>"
+        "<pre style='white-space:pre-wrap;'><code class='language-python'>"
+        f"{completion}"
+        "</code></pre>"
+    )
+    source.data["fill_color"][idx] = hover_color
+
+plot.add_tools(hover_tool)
+plot.renderers.append(nodes)
+
+# Layout
+show(layout)
+output_file("evolutionary_tree.html")
+
+# %%
+db_df["Score"].plot(backend="plotly")
+
+# %%
+from pathlib import Path
+
+from alpha_othello.evaluate import OthelloDockerEvaluator
+
+evaluator = OthelloDockerEvaluator(
+    name="test",
+    docker_image="python-othello:latest",
+    memory_limit="1g",
+    cpu_limit="1",
+    ais=[
+        ai_random,
+        ai_greedy,
+        ai_egaroucid_easy,
+        ai_egaroucid_hard,
+        ai_egaroucid_med,
+        ai_egaroucid_very_hard,
+    ],
+    eval_script_path=Path("src/alpha_othello/othello/eval.py"),
+    n_games=50,
+    size=8,
+    time_limit_ms=9999,
+)
+score = evaluator.evaluate(topk_completions[0])
+print(f"{score=}")
+del evaluator
+
 
 # %%
 def game_worker(ai1, ai2, size, time_limit_ms, batch_size=100):
@@ -112,29 +325,38 @@ def run_tournament(
 
 ais = {}
 ais |= {
-    f"({depth}, {final_depth})": partial(_ai_egaroucid, depth=depth, final_depth=final_depth)
+    f"({depth}, {final_depth})": partial(
+        _ai_egaroucid, depth=depth, final_depth=final_depth
+    )
     # for depth in [2, 4, 8, 16]
     # for final_depth in [2, 4, 8, 16]
     # if depth <= final_depth
     for depth, final_depth in [
-        (2, 2),
-        (8, 8),
-        (4, 16),
+        # (2, 2),
+        # # (2, 4),
+        # (4, 8),
+        # # (8, 8),
+        # (6, 12),
+        # (8, 16),
     ]
 }
 ais |= {
-    "random": ai_random,
-    "greedy": ai_greedy,
-#     "minimax": ai_minimax,
-#     # "mobility": ai_mobility,
-#     # "parity": ai_parity,
-    "heuristic": ai_heuristic,
-#     "egaroucid": ai_egaroucid,
+    # "random": ai_random,
+    # "greedy": ai_greedy,
+    # "egaroucid_easy": ai_egaroucid_easy,
+    "egaroucid_med": ai_egaroucid_med,
+    "egaroucid_hard": ai_egaroucid_hard,
+    "egaroucid_very_hard": ai_egaroucid_very_hard,
+    #     "minimax": ai_minimax,
+    #     # "mobility": ai_mobility,
+    #     # "parity": ai_parity,
+    # "heuristic": ai_heuristic,
+    #     "egaroucid": ai_egaroucid,
 }
-# ais |= {f"ai_{id}": globals()[f"ai_{id}"] for id in topk_ids}
+ais |= {f"ai_{id}": globals()[f"ai_{id}"] for id in topk_ids}
 print(ais)
 
-results = run_tournament(ais, size=8, n_games_per_pair=10, time_limit_ms=9999)
+results = run_tournament(ais, size=8, n_games_per_pair=50, time_limit_ms=9999)
 
 # %%
 df = pd.DataFrame(
@@ -234,6 +456,12 @@ res = minimize(
 pbar.close()
 
 ratings = ratings_dict_from_vec(res.x)
+ratings_df = pd.DataFrame(
+    {
+        "AI": list(ratings.keys()),
+        "Rating": list(ratings.values()),
+    }
+).sort_values(by="Rating", ascending=False)
 
 # Plot log likelihood history
 fig_ll = go.Figure()
@@ -257,7 +485,8 @@ fig_ratings.update_layout(
     title="Rating History", xaxis_title="Iteration", yaxis_title="Rating"
 )
 fig_ratings.show()
-ratings
+
+ratings_df
 
 
 # %%

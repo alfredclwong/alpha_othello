@@ -1,4 +1,3 @@
-import inspect
 from pathlib import Path
 from typing import Optional
 
@@ -15,11 +14,11 @@ from alpha_othello.llm import (
 )
 from alpha_othello.othello.ai import (
     ai_egaroucid_easy,
-    ai_egaroucid_hard,
     ai_egaroucid_med,
-    ai_greedy,
-    ai_heuristic,
+    ai_egaroucid_hard,
+    ai_egaroucid_very_hard,
     ai_random,
+    ai_greedy,
     get_function_source,
 )
 
@@ -126,10 +125,10 @@ def main():
         ais=[
             ai_random,
             ai_greedy,
-            ai_heuristic,
             ai_egaroucid_easy,
             ai_egaroucid_med,
             ai_egaroucid_hard,
+            ai_egaroucid_very_hard,
         ],
         eval_script_path=Path("src/alpha_othello/othello/eval.py"),
         n_games=50,

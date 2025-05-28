@@ -22,6 +22,13 @@ class Database(AbstractDatabase):
         completion_ids = [getattr(completion, "id") for completion in top_completions]
         return completion_ids
 
+    def get_all_completion_ids(self) -> list[int]:
+        session = self.get_session()
+        all_completions = session.query(Completion).all()
+        session.close()
+        completion_ids = [getattr(completion, "id") for completion in all_completions]
+        return completion_ids
+
     def get_completion(self, completion_id: int) -> str:
         session = self.get_session()
         completion = (
@@ -33,13 +40,12 @@ class Database(AbstractDatabase):
     def get_inspirations(self, completion_id: int) -> list[int]:
         session = self.get_session()
         inspirations = (
-            session.query(Completion)
-            .join(Score)
-            .filter(Score.completion_id == completion_id)
+            session.query(Inspiration)
+            .filter(Inspiration.completion_id == completion_id)
             .all()
         )
         session.close()
-        inspiration_ids = [getattr(inspiration, "id") for inspiration in inspirations]
+        inspiration_ids = [getattr(inspiration, "inspired_by_id") for inspiration in inspirations]
         return inspiration_ids
 
     def get_score(self, completion_id: int) -> int:

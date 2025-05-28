@@ -16,6 +16,22 @@ def get_function_source(func):
     return source
 
 
+def ai_human(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
+    print(board_to_egaroucid_str(board))
+    valid_moves = get_legal_squares(board, player)
+    print(f"Valid moves for {player.name}: {valid_moves}")
+    while True:
+        move = input(f"Player {player.name}, enter your move (row,col): ")
+        try:
+            row, col = map(int, move.split(","))
+            if (row, col) in valid_moves:
+                return (row, col)
+            else:
+                print("Invalid move. Please try again.")
+        except ValueError:
+            print("Invalid input format. Please use 'row,col'.")
+
+
 def ai_random(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
     valid_moves = get_legal_squares(board, player)
     return valid_moves[np.random.randint(len(valid_moves))]
@@ -104,11 +120,11 @@ def ai_heuristic(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
         # Heuristic: corners are best, edges are good, avoid giving up corners
         x, y = move
         corner_bonus = (
-            25
+            1
             if (x, y) in [(0, 0), (0, size - 1), (size - 1, 0), (size - 1, size - 1)]
             else 0
         )
-        edge_bonus = 5 if (x == 0 or x == size - 1 or y == 0 or y == size - 1) else 0
+        edge_bonus = 1 if (x == 0 or x == size - 1 or y == 0 or y == size - 1) else 0
 
         # Disc difference
         disc_diff = np.sum(new_board == player) - np.sum(new_board == (not player))
@@ -119,9 +135,9 @@ def ai_heuristic(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
 
         # Weighted sum
         return (
-            10 * len(flips)  # prioritize flipping more discs
-            + corner_bonus
-            + edge_bonus
+            5 * len(flips)  # prioritize flipping more discs
+            + 100 * corner_bonus
+            + 50 * edge_bonus
             + 2 * disc_diff
             + 3 * mobility
         )
@@ -218,12 +234,16 @@ def _ai_egaroucid(board: T_BOARD, player: Player, clock: T_CLOCK, depth=0, final
 
 
 def ai_egaroucid_easy(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
-    return _ai_egaroucid(board, player, clock, 2, 1)
+    return _ai_egaroucid(board, player, clock, 2, 2)
 
 
 def ai_egaroucid_med(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
-    return _ai_egaroucid(board, player, clock, 3, 3)
+    return _ai_egaroucid(board, player, clock, 4, 8)
 
 
 def ai_egaroucid_hard(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
-    return _ai_egaroucid(board, player, clock, 5, 5)
+    return _ai_egaroucid(board, player, clock, 6, 12)
+
+
+def ai_egaroucid_very_hard(board: T_BOARD, player: Player, clock: T_CLOCK) -> T_SQUARE:
+    return _ai_egaroucid(board, player, clock, 8, 16)

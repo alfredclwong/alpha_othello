@@ -124,14 +124,14 @@ class OthelloDockerEvaluator(Evaluator):
             check=True,
             capture_output=True,
             )
+            return result.stdout.decode("utf-8")
         except subprocess.CalledProcessError as e:
             print(f"Error occurred while running Docker command: {e}")
             print(f"Command: {e.cmd}")
             print(f"Return code: {e.returncode}")
             print(f"Output: {e.output.decode('utf-8')}")
             print(f"Error output: {e.stderr.decode('utf-8')}")
-            raise
-        return result.stdout.decode("utf-8")
+        return ""
 
     def _start_container(self):
         """Start the Docker container and block until it's ready."""

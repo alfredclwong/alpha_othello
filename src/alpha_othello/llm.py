@@ -38,13 +38,20 @@ a higher score by making improvements and/or trying new ideas.\n\
         )
     )
     epilogue_str = """\
-Output your reasoning in between <REASONING> and </REASONING> tags, followed by the code \
-completion in between <COMPLETION> and </COMPLETION> tags. Do not output any other text. \
+Your output should consist of two parts: your reasoning for the completion and the completion itself. \
 The reasoning should explain how this completion will improve upon previous iterations. \
 The completion will be appended to the skeleton into a single function, so it should not \
 repeat the function signature and it should start with one level of indentation. If you \
 import libraries or define helper functions, make sure to do so within the scope of the \
-function and before they are used. Make sure that the completion is valid Python code.\
+function and before they are used. Make sure that the completion is valid Python code.
+
+Your output should follow this format:
+<REASONING>
+{{reasoning}}
+</REASONING>
+<COMPLETION>
+{{completion}}
+</COMPLETION>
 """
     parts = [preamble_str, task_str, skeleton_str, inspiration_str, epilogue_str]
     if not inspirations:

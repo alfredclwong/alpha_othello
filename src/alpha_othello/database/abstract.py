@@ -32,7 +32,7 @@ class AbstractDatabase(ABC):
         pass
 
     @abstractmethod
-    def get_score(self, completion_id: int) -> int:
+    def get_score(self, completion_id: int) -> float:
         pass
 
     @abstractmethod
@@ -46,5 +46,5 @@ class AbstractDatabase(ABC):
         pass
 
     @abstractmethod
-    def store_score(self, score: int, completion_id: int) -> int:
+    def store_score(self, score: float, completion_id: int) -> int:
         pass

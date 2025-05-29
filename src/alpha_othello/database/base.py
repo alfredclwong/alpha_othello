@@ -1,4 +1,4 @@
-from sqlalchemy import Column, ForeignKey, Integer, Text
+from sqlalchemy import Column, ForeignKey, Integer, Text, Float
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -32,6 +32,6 @@ class Inspiration(Base):
 class Score(Base):
     __tablename__ = "score"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    score = Column(Integer, nullable=False)
+    score = Column(Float, nullable=False)
     completion_id = Column(Integer, ForeignKey("completion.id"), nullable=False)
     completion = relationship("Completion", backref="scores")

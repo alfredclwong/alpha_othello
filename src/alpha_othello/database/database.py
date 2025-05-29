@@ -48,7 +48,7 @@ class Database(AbstractDatabase):
         inspiration_ids = [getattr(inspiration, "inspired_by_id") for inspiration in inspirations]
         return inspiration_ids
 
-    def get_score(self, completion_id: int) -> int:
+    def get_score(self, completion_id: int) -> float:
         session = self.get_session()
         score = (
             session.query(Score).filter(Score.completion_id == completion_id).first()
@@ -81,7 +81,7 @@ class Database(AbstractDatabase):
         session.close()
         return completion_id
 
-    def store_score(self, score: int, completion_id: int) -> int:
+    def store_score(self, score: float, completion_id: int) -> int:
         session = self.get_session()
         score_obj = Score(score=score, completion_id=completion_id)
         session.add(score_obj)

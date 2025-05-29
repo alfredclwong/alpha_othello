@@ -1,0 +1,2 @@
+def pack_26() -> list[tuple[float, float, float]]:
+    # Returns a list of 26 (x, y, r) tuples representing circles packed into a unit square

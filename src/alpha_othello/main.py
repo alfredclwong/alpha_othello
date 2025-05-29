@@ -6,7 +6,7 @@ from pygments.formatters import TerminalFormatter
 from pygments.lexers import PythonLexer
 
 from alpha_othello.database.database import Database
-from alpha_othello.evaluate import Evaluator, OthelloDockerEvaluator
+from alpha_othello.evaluate import Evaluator, OthelloDockerEvaluator, DockerEvaluator
 from alpha_othello.llm import (
     extract_tagged_text,
     generate_prompt,
@@ -21,6 +21,7 @@ from alpha_othello.othello.ai import (
     ai_greedy,
     get_function_source,
 )
+from alpha_othello.circle_packing.initial import pack_26
 
 
 def get_api_key() -> str:
@@ -84,7 +85,7 @@ def evolve(
     print(f"Score: {score}")
 
 
-def main():
+def main_othello():
     temperature = 0.7
     size = 8
     time_limit_ms = 999
@@ -151,5 +152,61 @@ def main():
         )
 
 
+def main_circles():
+    temperature = 0.7
+    max_tokens = 2000
+    topk_completions = 3
+    api_key = get_api_key()
+
+    skeleton_path = Path("src/alpha_othello/circle_packing/skeleton.txt")
+    with open(skeleton_path, "r") as f:
+        skeleton = f.read()
+    task = """\
+You are an expert mathematician specializing in circle packing problems and computational \
+geometry. Your task is to improve a constructor function that directly produces a specific \
+arrangement of 26 circles in a unit square, such that none of them overlap. The function \
+should return a list of tuples, (x, y, r), where (x, y) is the center of a circle and r is \
+its radius. The score will be the sum of the radii of all circles, which you should maximise. \
+The Python environment has the following additional libraries available: numpy, scipy.
+"""
+
+    evaluator = DockerEvaluator(
+        name="circles",
+        docker_image="circle-packing:latest",
+        memory_limit="1g",
+        cpu_limit="1",
+        eval_script_path=Path("src/alpha_othello/circle_packing/eval.py"),
+    )
+
+    db = Database("sqlite:///circles.db")
+
+    if not db.get_topk_completion_ids(1):
+        completion_str = get_function_source(pack_26)
+        completion_id = db.store_completion(
+            completion_str,
+            "Place 26 circles in a very simple structured pattern with no overlaps.",
+            [],
+        )
+        score = evaluator.evaluate(completion_str)
+        db.store_score(score, completion_id)
+
+    llm = "google/gemma-3-27b-it:free"
+
+    for i in range(1000):
+        print(f"Generation {i}")
+        evolve(
+            db,
+            llm,
+            api_key,
+            max_tokens,
+            temperature,
+            skeleton,
+            task,
+            topk_completions,
+            evaluator,
+        )
+
+
 if __name__ == "__main__":
-    main()
+    # main_othello()
+    main_circles()

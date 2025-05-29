@@ -55,6 +55,7 @@ def init_parser():
     parser.add_argument(
         "-c", "--completion", type=str, required=True, help="Completion code path"
     )
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
     return parser
 
 
@@ -66,6 +67,7 @@ def main():
     parser = init_parser()
     args = parser.parse_args()
     completion_path = Path(args.completion)
+    verbose = args.verbose
 
     with open(completion_path, "r") as f:
         completion_str = f.read()
@@ -73,6 +75,9 @@ def main():
     local_vars = {}
     exec(f"def pack_26():\n{completion_str}", globals(), local_vars)
     packing = local_vars["pack_26"]()
+
+    if verbose:
+        print(f"<PACKING>{packing}</PACKING>")
 
     if not is_valid(packing):
         print_score(0.0)

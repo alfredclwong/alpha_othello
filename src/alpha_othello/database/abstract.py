@@ -24,6 +24,14 @@ class AbstractDatabase(ABC):
         pass
 
     @abstractmethod
+    def get_all_completion_ids(self) -> list[int]:
+        pass
+
+    @abstractmethod
+    def get_completion_count(self) -> int:
+        pass
+
+    @abstractmethod
     def get_completion(self, completion_id: int) -> str:
         pass
 
@@ -32,11 +40,15 @@ class AbstractDatabase(ABC):
         pass
 
     @abstractmethod
-    def get_score(self, completion_id: int) -> float:
+    def get_scores(self, completion_id: int) -> dict[str, float]:
         pass
 
     @abstractmethod
     def get_reasoning(self, completion_id: int) -> str:
+        pass
+
+    @abstractmethod
+    def get_prompt(self, completion_id: int) -> dict[str, Optional[str]]:
         pass
 
     @abstractmethod
@@ -46,5 +58,11 @@ class AbstractDatabase(ABC):
         pass
 
     @abstractmethod
-    def store_score(self, score: float, completion_id: int) -> int:
+    def store_score(self, score: float, name: str, completion_id: int) -> int:
+        pass
+
+    @abstractmethod
+    def store_prompt(
+        self, prompt: Optional[str], variation: Optional[str], completion_id: int
+    ) -> int:
         pass

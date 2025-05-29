@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Optional
+import random
 
 import pygments
 from pygments.formatters import TerminalFormatter
@@ -11,6 +12,7 @@ from alpha_othello.llm import (
     extract_tagged_text,
     generate_prompt,
     get_llm_output,
+    PROMPT_VARIATIONS,
 )
 from alpha_othello.othello.ai import (
     ai_egaroucid_easy,
@@ -39,8 +41,9 @@ def evolve(
     temperature: float,
     skeleton: str,
     task: str,
-    k: int,
+    topk: int,
     evaluator: Evaluator,
+    prev: int = 0,
 ):
     """Apply an evolutionary step to the database.
         1. Get topk inspirations from previous completions
@@ -57,12 +60,28 @@ def evolve(
         5. Decouple completion and scoring
         6. Change to diff models to generate completions
     """
-    topk_completion_ids = db.get_topk_completion_ids(k)
-    inspirations = [
-        db.get_completion(completion_id) for completion_id in topk_completion_ids
-    ]
-    scores = [db.get_score(completion_id) for completion_id in topk_completion_ids]
-    prompt = generate_prompt(skeleton, inspirations, scores, task)
+    topk_completion_ids = db.get_topk_completion_ids(topk)
+    if prev > 0:
+        lastp_completion_ids = db.get_lastp_completion_ids(prev)
+    else:
+        lastp_completion_ids = []
+    inspiration_ids = list(set(topk_completion_ids + lastp_completion_ids))
+    inspirations = [db.get_completion(cid) for cid in inspiration_ids]
+    scores = [db.get_scores(cid)["score"] for cid in inspiration_ids]
+
+    # Generate prompt
+    n_completions = db.get_completion_count()
+    metadata = {
+        "n_completions": n_completions,
+        "inspiration_ids": inspiration_ids,
+    }
+    variations_keys = list(PROMPT_VARIATIONS.keys())
+    if n_completions < 20 or not variations_keys:
+        variation = None
+    else:
+        variation = random.choice(variations_keys)
+    prompt = generate_prompt(skeleton, inspirations, scores, task, variation=variation, metadata=metadata)
+    print(f"Prompt:\n{prompt}")
 
     llm_output = get_llm_output(prompt, llm, api_key, max_tokens, temperature)
     reasoning = extract_tagged_text(llm_output, "REASONING")
@@ -72,16 +91,15 @@ def evolve(
         print("LLM output:")
         print(llm_output)
         return
-    # completion = get_function_source(ai_heuristic)
 
     print(f"Reasoning:\n{reasoning}")
     highlighted = pygments.highlight(completion, PythonLexer(), TerminalFormatter())
     print(f"Completion:\n{highlighted}")
 
     score = evaluator.evaluate(completion)
-    if score > 0:
-        completion_id = db.store_completion(completion, reasoning, topk_completion_ids)
-        db.store_score(score, completion_id)
+    completion_id = db.store_completion(completion, reasoning, inspiration_ids)
+    db.store_score(score, "score", completion_id)
+    db.store_prompt(prompt, variation, completion_id)
     print(f"Score: {score}")
 
 
@@ -109,7 +127,7 @@ def main_othello():
         completion_id = db.store_completion(
             get_function_source(ai_random), "Randomly selects a move", []
         )
-        db.store_score(0, completion_id)
+        db.store_score(0, "score", completion_id)
 
     # llm = "meta-llama/llama-3.3-8b-instruct:free"
     # llm = "deepseek/deepseek-chat-v3-0324:free"
@@ -155,7 +173,8 @@ def main_othello():
 def main_circles():
     temperature = 0.7
     max_tokens = 2000
-    topk_completions = 3
+    topk = 2
+    prev = 2
     api_key = get_api_key()
 
     skeleton_path = Path("src/alpha_othello/circle_packing/skeleton.txt")
@@ -167,15 +186,16 @@ geometry. Your task is to improve a constructor function that directly produces 
 arrangement of 26 circles in a unit square, such that none of them overlap. The function \
 should return a list of tuples, (x, y, r), where (x, y) is the center of a circle and r is \
 its radius. The score will be the sum of the radii of all circles, which you should maximise. \
-The Python environment has the following additional libraries available: numpy, scipy.
+The current best score found by leading researchers is 2.635. You can beat this. \
+The Python environment has the following additional libraries available: numpy, scipy. \
 """
 
     evaluator = DockerEvaluator(
         name="circles",
         docker_image="circle-packing:latest",
-        memory_limit="1g",
-        cpu_limit="1",
         eval_script_path=Path("src/alpha_othello/circle_packing/eval.py"),
+        memory_limit=None,
+        cpu_limit=None,
     )
 
     db = Database("sqlite:///circles.db")
@@ -188,11 +208,11 @@ The Python environment has the following additional libraries available: numpy, 
             [],
         )
         score = evaluator.evaluate(completion_str)
-        db.store_score(score, completion_id)
+        db.store_score(score, "score", completion_id)
 
     llm = "google/gemma-3-27b-it:free"
 
-    for i in range(1000):
+    for i in range(200):
         print(f"Generation {i}")
         evolve(
             db,
@@ -202,8 +222,9 @@ The Python environment has the following additional libraries available: numpy, 
             temperature,
             skeleton,
             task,
-            topk_completions,
+            topk,
             evaluator,
+            prev,
         )
 
 

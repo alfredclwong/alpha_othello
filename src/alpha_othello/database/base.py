@@ -33,5 +33,15 @@ class Score(Base):
     __tablename__ = "score"
     id = Column(Integer, primary_key=True, autoincrement=True)
     score = Column(Float, nullable=False)
+    name = Column(Text, nullable=False)
     completion_id = Column(Integer, ForeignKey("completion.id"), nullable=False)
     completion = relationship("Completion", backref="scores")
+
+
+class Prompt(Base):
+    __tablename__ = "prompt"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    prompt = Column(Text, nullable=True)
+    variation = Column(Text, nullable=True)
+    completion_id = Column(Integer, ForeignKey("completion.id"), nullable=False, unique=True)
+    completion = relationship("Completion", backref="prompt", uselist=False)

@@ -3,6 +3,7 @@ import tempfile
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Optional
 
 from othello.types import T_PLAYER_FN, Player
 
@@ -22,8 +23,8 @@ class DockerEvaluator(Evaluator):
         name: str,
         docker_image: str,
         eval_script_path: Path,
-        memory_limit: str,
-        cpu_limit: str,
+        memory_limit: Optional[str] = None,
+        cpu_limit: Optional[str] = None,
     ):
         self.name = name
         self.docker_image = docker_image
@@ -69,23 +70,22 @@ class DockerEvaluator(Evaluator):
 
     def _start_container(self):
         """Start the Docker container and block until it's ready."""
-        subprocess.run(
-            [
-                "docker",
-                "run",
-                "-it",
-                "--rm",
-                "--name",
-                self.name,
-                "--memory",
-                self.memory_limit,
-                "--cpus",
-                self.cpu_limit,
-                "-d",
-                self.docker_image,
-            ],
-            check=True,
-        )
+        args = [
+            "docker",
+            "run",
+            "-it",
+            "--rm",
+            "--name",
+            self.name,
+            "-d",
+            self.docker_image,
+        ]
+        if self.memory_limit:
+            args += ["--memory", self.memory_limit]
+        if self.cpu_limit:
+            args += ["--cpus", self.cpu_limit]
+        subprocess.run(args, check=True)
+
         # Wait for the container to be ready
         while True:
             try:

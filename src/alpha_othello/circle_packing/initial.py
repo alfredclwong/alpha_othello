@@ -1,4 +1,4 @@
-# https://github.com/codelion/openevolve/blob/main/examples/circle_packing/initial_program.py
+# Inspired by https://github.com/codelion/openevolve/blob/main/examples/circle_packing/initial_program.py
 
 def pack_26() -> list[tuple[float, float, float]]:
     import numpy as np
@@ -16,17 +16,18 @@ def pack_26() -> list[tuple[float, float, float]]:
                     radii[i] *= scale
                     radii[j] *= scale
         return radii
-
-    n = 26
-    centers = np.zeros((n, 2))
-
+    centers = np.zeros((26, 2))
     centers[0] = [0.5, 0.5]
-    for i in range(8):
-        angle = 2 * np.pi * i / 8
-        centers[i + 1] = [0.5 + 0.3 * np.cos(angle), 0.5 + 0.3 * np.sin(angle)]
-    for i in range(16):
-        angle = 2 * np.pi * i / 16
-        centers[i + 9] = [0.5 + 0.7 * np.cos(angle), 0.5 + 0.7 * np.sin(angle)]
-    centers = np.clip(centers, 0.001, 0.999)
+    rings = [(9, 0.3), (16, 0.5)]
+    i = 1
+    for count, radius in rings:
+        angle_step = 2 * np.pi / count
+        for j in range(count):
+            angle = i * angle_step
+            x = 0.5 + radius * np.cos(angle)
+            y = 0.5 + radius * np.sin(angle)
+            centers[i] = [x, y]
+            i += 1
+    centers = np.clip(centers, 0.01, 0.99)
     radii = compute_max_radii(centers)
-    return [(centers[i, 0].item(), centers[i, 1].item(), radii[i].item()) for i in range(n)]
+    return [(x, y, r) for (x, y), r in zip(centers.tolist(), radii.tolist())]

@@ -55,7 +55,7 @@ PROMPT_VARIATIONS = {
 def generate_prompt(
     skeleton: str,
     inspirations: list[str],
-    scores: list[float],
+    score_dicts: dict[str, float],
     task: str,
     variation: Optional[str] = None,
     metadata: dict[str, Any] = {},
@@ -81,7 +81,7 @@ will be scored on its ability to complete a task. Higher scores are better.\
 
     # Sort inspirations in ascending order of scores
     # I noticed that the LLM reasons as if the inspirations are iterative improvements
-    if not inspirations or not scores:
+    if not inspirations or not score_dicts:
         inspiration_str = ""
     else:
         inspiration_str = """\
@@ -90,15 +90,15 @@ You should aim to achieve a higher score by making improvements and/or trying ne
 """
         if "inspiration_ids" in metadata:
             iids = metadata["inspiration_ids"]
-            inspiration_data = zip(iids, inspirations, scores)
+            inspiration_data = zip(iids, inspirations, score_dicts)
         else:
             inspiration_data = zip(
-                range(len(inspirations)), inspirations, scores
+                range(len(inspirations)), inspirations, score_dicts
             )
-        inspiration_data = sorted(inspiration_data, key=lambda x: x[-1])
+        inspiration_data = sorted(inspiration_data, key=lambda x: x[-1]["SCORE"])
         inspiration_str += "\n".join(
-            f"<COMPLETION_{iid}>\n{completion}\n</COMPLETION_{iid}>\n<SCORE_{iid}>{score}</SCORE_{iid}>"
-            for (iid, completion, score) in inspiration_data
+            f"<COMPLETION_{iid}>\n{completion}\n</COMPLETION_{iid}>\n<SCORE_{iid}>{score_dict}</SCORE_{iid}>"
+            for (iid, completion, score_dict) in inspiration_data
         )
         if "n_completions" in metadata:
             n_completions = metadata["n_completions"]
@@ -168,7 +168,10 @@ def get_llm_output(
         "max_tokens": max_tokens,
         "temperature": temperature,
     }
-    response = requests.post(url, headers=headers, data=json.dumps(data))
+    try:
+        response = requests.post(url, headers=headers, data=json.dumps(data))
+    except requests.RequestException as e:
+        raise Exception(f"Error while calling LLM API: {e}")
     if response.status_code == 200:
         response_data = response.json()
         try:

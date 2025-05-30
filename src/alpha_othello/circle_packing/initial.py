@@ -1,6 +1,11 @@
 # Inspired by https://github.com/codelion/openevolve/blob/main/examples/circle_packing/initial_program.py
 
+
 def pack_26() -> list[tuple[float, float, float]]:
+    return []
+
+
+def pack_26_old() -> list[tuple[float, float, float]]:
     import numpy as np
     def compute_max_radii(centers):
         n = centers.shape[0]

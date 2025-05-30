@@ -34,13 +34,15 @@ class DockerEvaluator(Evaluator):
         self._start_container()
         self._cp(eval_script_path, Path("/app/eval.py"))
 
-    def evaluate(self, completion: str) -> float:
+    def evaluate(self, completion: str) -> dict[str, float]:
         completion_path = Path("/app/completion")
         self._write(completion_path, completion)
         docker_stdout = self._eval(["-c", str(completion_path)])
-        score = extract_tagged_text(docker_stdout, "SCORE")
-        print(f"{score=}")
-        return float(score) if score else 0.0
+        score_str = extract_tagged_text(docker_stdout, "SCORE")
+        score_dict = {
+            k: float(v) for k, v in (s.split(": ") for s in score_str.split(", "))
+        }
+        return score_dict
 
     def _eval(self, args: list[str]) -> str:
         try:

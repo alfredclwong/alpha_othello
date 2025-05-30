@@ -8,12 +8,12 @@ class Database(AbstractDatabase):
     def __init__(self, db_url: str):
         super().__init__(db_url)
 
-    def get_topk_completion_ids(self, k: int) -> list[int]:
+    def get_topk_completion_ids(self, k: int, score_name: str = "SCORE") -> list[int]:
         session = self.get_session()
         top_completions = (
             session.query(Completion)
             .join(Score)
-            .group_by(Completion.id)
+            .filter(Score.name == score_name)
             .order_by(Score.score.desc())
             .limit(k)
             .all()
@@ -25,10 +25,7 @@ class Database(AbstractDatabase):
     def get_lastp_completion_ids(self, p: int) -> list[int]:
         session = self.get_session()
         last_completions = (
-            session.query(Completion)
-            .order_by(Completion.id.desc())
-            .limit(p)
-            .all()
+            session.query(Completion).order_by(Completion.id.desc()).limit(p).all()
         )
         session.close()
         completion_ids = [getattr(completion, "id") for completion in last_completions]
@@ -112,6 +109,15 @@ class Database(AbstractDatabase):
         session.commit()
         session.close()
         return completion_id
+
+    def store_scores(
+        self, score_dict: dict[str, float], completion_id: int
+    ) -> list[int]:
+        score_ids = [
+            self.store_score(score, name, completion_id)
+            for name, score in score_dict.items()
+        ]
+        return score_ids
 
     def store_score(self, score: float, name: str, completion_id: int) -> int:
         session = self.get_session()

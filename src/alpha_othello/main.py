@@ -1,29 +1,29 @@
+import random
 from pathlib import Path
 from typing import Optional
-import random
 
 import pygments
 from pygments.formatters import TerminalFormatter
 from pygments.lexers import PythonLexer
 
+from alpha_othello.circle_packing.initial import pack_26
 from alpha_othello.database.database import Database
-from alpha_othello.evaluate import Evaluator, OthelloDockerEvaluator, DockerEvaluator
+from alpha_othello.evaluate import DockerEvaluator, Evaluator, OthelloDockerEvaluator
 from alpha_othello.llm import (
+    PROMPT_VARIATIONS,
     extract_tagged_text,
     generate_prompt,
     get_llm_output,
-    PROMPT_VARIATIONS,
 )
 from alpha_othello.othello.ai import (
     ai_egaroucid_easy,
-    ai_egaroucid_med,
     ai_egaroucid_hard,
+    ai_egaroucid_med,
     ai_egaroucid_very_hard,
-    ai_random,
     ai_greedy,
+    ai_random,
     get_function_source,
 )
-from alpha_othello.circle_packing.initial import pack_26
 
 
 def get_api_key() -> str:
@@ -67,7 +67,7 @@ def evolve(
         lastp_completion_ids = []
     inspiration_ids = list(set(topk_completion_ids + lastp_completion_ids))
     inspirations = [db.get_completion(cid) for cid in inspiration_ids]
-    scores = [db.get_scores(cid)["score"] for cid in inspiration_ids]
+    score_dicts = [db.get_scores(cid) for cid in inspiration_ids]
 
     # Generate prompt
     n_completions = db.get_completion_count()
@@ -80,10 +80,20 @@ def evolve(
         variation = None
     else:
         variation = random.choice(variations_keys)
-    prompt = generate_prompt(skeleton, inspirations, scores, task, variation=variation, metadata=metadata)
+    prompt = generate_prompt(
+        skeleton,
+        inspirations,
+        score_dicts,
+        task,
+        variation=variation,
+        metadata=metadata,
+    )
     print(f"Prompt:\n{prompt}")
-
-    llm_output = get_llm_output(prompt, llm, api_key, max_tokens, temperature)
+    try:
+        llm_output = get_llm_output(prompt, llm, api_key, max_tokens, temperature)
+    except Exception as e:
+        print(f"Error generating LLM output: {e}")
+        llm_output = ""
     reasoning = extract_tagged_text(llm_output, "REASONING")
     completion = extract_tagged_text(llm_output, "COMPLETION")
     if not completion:
@@ -96,11 +106,11 @@ def evolve(
     highlighted = pygments.highlight(completion, PythonLexer(), TerminalFormatter())
     print(f"Completion:\n{highlighted}")
 
-    score = evaluator.evaluate(completion)
+    score_dict = evaluator.evaluate(completion)
     completion_id = db.store_completion(completion, reasoning, inspiration_ids)
-    db.store_score(score, "score", completion_id)
+    db.store_scores(score_dict, completion_id)
     db.store_prompt(prompt, variation, completion_id)
-    print(f"Score: {score}")
+    print(f"Scores: {score_dict}")
 
 
 def main_othello():
@@ -186,7 +196,9 @@ geometry. Your task is to improve a constructor function that directly produces 
 arrangement of 26 circles in a unit square, such that none of them overlap. The function \
 should return a list of tuples, (x, y, r), where (x, y) is the center of a circle and r is \
 its radius. The score will be the sum of the radii of all circles, which you should maximise. \
-The current best score found by leading researchers is 2.635. You can beat this. \
+Invalid packings, where circles overlap or extend beyond the unit square, will score 0. \
+Function completions which take longer than 5 minutes to run will also score 0. \
+The current best score found by other researchers is 2.635. You can beat this. \
 The Python environment has the following additional libraries available: numpy, scipy. \
 """
 
@@ -207,8 +219,8 @@ The Python environment has the following additional libraries available: numpy, 
             "Place 26 circles in a very simple structured pattern with no overlaps.",
             [],
         )
-        score = evaluator.evaluate(completion_str)
-        db.store_score(score, "score", completion_id)
+        score_dict = evaluator.evaluate(completion_str)
+        db.store_scores(score_dict, completion_id)
 
     llm = "google/gemma-3-27b-it:free"
 

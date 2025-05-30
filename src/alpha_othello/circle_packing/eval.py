@@ -16,6 +16,7 @@ class Reason(Enum):
     OUT_OF_BOUNDS = auto()
     OVERLAP = auto()
     TIMEOUT = auto()
+    INVALID_COMPLETION = auto()
 
 
 def is_valid(
@@ -104,11 +105,11 @@ def main():
     with open(completion_path, "r") as f:
         completion_str = f.read()
 
-    local_vars = {}
-    exec(f"def pack_26():\n{completion_str}", globals(), local_vars)
-
     score = 0.0
+
     try:
+        local_vars = {}
+        exec(f"def pack_26():\n{completion_str}", globals(), local_vars)
         packing = run_with_timeout(local_vars["pack_26"], 300)
         if verbose:
             print(f"<PACKING>{packing}</PACKING>")
@@ -117,6 +118,8 @@ def main():
             score = score_packing(packing)
     except TimeoutError:
         reason = Reason.TIMEOUT
+    except Exception as e:
+        reason = Reason.INVALID_COMPLETION
 
     print_score(score, reason)
 

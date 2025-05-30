@@ -15,7 +15,7 @@ if packing_strs_path.exists():
 else:
     db = Database("sqlite:///circles.db")
     # completion_ids = db.get_all_completion_ids()
-    completion_ids = db.get_topk_completion_ids(1, "SCORE")
+    completion_ids = db.get_topk_completion_ids(3, "SCORE")
     completions = [db.get_completion(cid) for cid in completion_ids]
     db.close()
 

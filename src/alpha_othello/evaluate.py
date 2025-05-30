@@ -13,9 +13,8 @@ from alpha_othello.othello.ai import get_function_source
 
 class Evaluator(ABC):
     @abstractmethod
-    def evaluate(self, *args, **kwargs) -> float:
-        return 0
-
+    def evaluate(self, *args, **kwargs) -> dict[str, float]:
+        pass
 
 class DockerEvaluator(Evaluator):
     def __init__(

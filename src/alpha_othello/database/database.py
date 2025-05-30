@@ -84,13 +84,13 @@ class Database(AbstractDatabase):
 
     def get_prompt(self, completion_id: int) -> dict[str, Optional[str]]:
         session = self.get_session()
-        completion = (
-            session.query(Completion).filter(Completion.id == completion_id).first()
+        prompt = (
+            session.query(Prompt).filter(Prompt.completion_id == completion_id).first()
         )
         session.close()
         return {
-            "prompt": getattr(completion, "prompt", None),
-            "variation": getattr(completion, "variation", None),
+            "prompt": getattr(prompt, "prompt", None),
+            "variation": getattr(prompt, "variation", None),
         }
 
     def store_completion(

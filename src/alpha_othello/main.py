@@ -91,7 +91,8 @@ def evolve(
         variation=variation,
         metadata=metadata,
     )
-    print(f"Prompt:\n{prompt}")
+    # print(f"Prompt:\n{prompt}")
+
     try:
         llm_output = get_llm_output(prompt, llm, api_key, max_tokens, temperature)
     except Exception as e:
@@ -110,6 +111,9 @@ def evolve(
     print(f"Completion:\n{highlighted}")
 
     score_dict = evaluator.evaluate(completion)
+    if not score_dict:
+        print("No score found, skipping completion")
+        return
     completion_id = db.store_completion(completion, reasoning, inspiration_ids)
     db.store_scores(score_dict, completion_id)
     db.store_prompt(prompt, variation, completion_id)

@@ -39,6 +39,8 @@ class DockerEvaluator(Evaluator):
         self._write(completion_path, completion)
         docker_stdout = self._eval(["-c", str(completion_path)])
         score_str = extract_tagged_text(docker_stdout, "SCORE")
+        if not score_str:
+            return {}
         score_dict = {
             k: float(v) for k, v in (s.split(": ") for s in score_str.split(", "))
         }

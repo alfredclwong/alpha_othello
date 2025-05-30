@@ -54,7 +54,7 @@ PROMPT_VARIATIONS = {
 
 def generate_prompt(
     skeleton: str,
-    inspirations: list[str],
+    inspirations: list[tuple[str, str]],
     score_dicts: dict[str, float],
     task: str,
     variation: Optional[str] = None,
@@ -97,8 +97,10 @@ You should aim to achieve a higher score by making improvements and/or trying ne
             )
         inspiration_data = sorted(inspiration_data, key=lambda x: x[-1]["SCORE"])
         inspiration_str += "\n".join(
-            f"<COMPLETION_{iid}>\n{completion}\n</COMPLETION_{iid}>\n<SCORE_{iid}>{score_dict}</SCORE_{iid}>"
-            for (iid, completion, score_dict) in inspiration_data
+            f"\n<REASONING_{iid}>\n{reasoning}\n</REASONING_{iid}>"
+            f"<COMPLETION_{iid}>\n{completion}\n</COMPLETION_{iid}>"
+            f"\n<SCORE_{iid}>{score_dict}</SCORE_{iid}>"
+            for (iid, (completion, reasoning), score_dict) in inspiration_data
         )
         if "n_completions" in metadata:
             n_completions = metadata["n_completions"]

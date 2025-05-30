@@ -66,7 +66,10 @@ def evolve(
     else:
         lastp_completion_ids = []
     inspiration_ids = list(set(topk_completion_ids + lastp_completion_ids))
-    inspirations = [db.get_completion(cid) for cid in inspiration_ids]
+    inspirations = [
+        (db.get_completion(cid), db.get_reasoning(cid))
+        for cid in inspiration_ids
+    ]
     score_dicts = [db.get_scores(cid) for cid in inspiration_ids]
 
     # Generate prompt
@@ -182,7 +185,7 @@ def main_othello():
 
 def main_circles():
     temperature = 0.7
-    max_tokens = 2000
+    max_tokens = 4096
     topk = 2
     prev = 2
     api_key = get_api_key()

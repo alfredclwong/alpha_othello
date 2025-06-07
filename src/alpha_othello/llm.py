@@ -13,11 +13,12 @@ PROMPT_VARIATIONS = {
         "leads to a higher score without changing the overall approach or algorithm significantly."
     ),
     "explore": (
-        "Try to explore new ideas or approaches that might lead to a higher score. This could "
-        "include changing the algorithm, introducing new techniques, or applying different "
-        "strategies. The goal is to find a new direction that could lead to a better score, "
-        "and to provide variety in the completions. This might involve taking risks or "
-        "experimenting with unconventional methods."
+        "The iterative process has reached a plateau, so we need to explore new ideas to make progress. "
+        "Try to explore new approaches or techniques that were not used in the previous completions. "
+        "This might include trying different algorithms, using new libraries, or implementing novel "
+        "data structures. The goal is to break out of the current pattern and find a new direction that "
+        "could lead to a higher score. This could involve significant changes to the code or approach, "
+        "so be creative and think outside the box."
     ),
     "simplify": (
         "Try to simplify the previous completions by removing unnecessary complexity or "
@@ -35,27 +36,33 @@ PROMPT_VARIATIONS = {
     "fix": (
         "Try to fix any issues or bugs in the previous completions that might be causing low scores. "
         "This might include correcting logic errors, checking for edge cases, or addressing performance issues. "
-        "The goal is to ensure that the code works correctly and efficiently, which could lead to a "
-        "higher score."
+        "The goal is to ensure that the code works correctly and efficiently, which could lead to a higher score."
     ),
     "optimize": (
         "Try to optimize the previous completions by improving performance or reducing resource usage. "
         "This might include optimizing algorithms, reducing memory usage, or improving execution speed. "
         "The goal is to make the code more efficient and effective, which could lead to a higher score."
     ),
-    "combine": (
-        "Try to combine the best parts of the previous completions to create a new, improved completion. "
-        "This might include merging different approaches, integrating successful techniques, or synthesizing "
-        "ideas from multiple completions. The goal is to leverage the strengths of previous attempts to achieve "
-        "a higher score."
-    ),
+    "plan": (
+        "Some ideas may take several iterations to implement, so it is important to plan ahead. "
+        "Try to outline a plan for how to implement the next steps in the evolution process. "
+        "This might include identifying key areas to focus on, setting specific goals for the next "
+        "completions, or outlining a strategy for how to approach the task. The goal is to have a clear "
+        "direction for the next steps, which could lead to a higher score."
+    )
+    # "combine": (
+    #     "Try to combine the best parts of the previous completions to create a new, improved completion. "
+    #     "This might include merging different approaches, integrating successful techniques, or synthesizing "
+    #     "ideas from multiple completions. The goal is to leverage the strengths of previous attempts to achieve "
+    #     "a higher score."
+    # ),
 }
 
 
 def generate_prompt(
     skeleton: str,
     inspirations: list[tuple[str, str]],
-    score_dicts: dict[str, float],
+    score_dicts: list[dict[str, float]],
     task: str,
     variation: Optional[str] = None,
     metadata: dict[str, Any] = {},
@@ -109,7 +116,7 @@ You should aim to achieve a higher score by making improvements and/or trying ne
     variation_str = PROMPT_VARIATIONS.get(variation, "") if variation else ""
     epilogue_str = """\
 Your output should consist of two parts: your reasoning for the completion and the completion itself. \
-The reasoning should explain how this completion will improve upon previous iterations. \
+The reasoning should concisely explain how this completion will improve upon previous iterations. \
 The completion will be appended to the skeleton into a single function, so it should not \
 repeat the function signature and it should start with one level of indentation. If you \
 import libraries or define helper functions, make sure to do so within the scope of the \
@@ -167,19 +174,22 @@ def get_llm_output(
                 "content": prompt,
             }
         ],
-        "max_tokens": max_tokens,
         "temperature": temperature,
     }
-    try:
-        response = requests.post(url, headers=headers, data=json.dumps(data))
-    except requests.RequestException as e:
-        raise Exception(f"Error while calling LLM API: {e}")
+    if max_tokens is not None:
+        data["max_tokens"] = max_tokens
+
+    # is_reasoning_model = "deepseek" in model_name.lower()
+    # if is_reasoning_model:
+    #     data["reasoning"] = {
+    #         # "max_tokens": min(512, max_tokens // 4) if max_tokens else None,
+    #         # "exclude": True,
+    #     }
+
+    response = requests.post(url, headers=headers, data=json.dumps(data))
     if response.status_code == 200:
         response_data = response.json()
-        try:
-            llm_output = response_data["choices"][0]["message"]["content"]
-        except (KeyError, IndexError):
-            raise Exception("Error: Unexpected response format from LLM", response_data)
+        llm_output = response_data["choices"][0]["message"]["content"]
         return llm_output
     else:
         raise Exception(f"Error: {response.status_code} - {response.text}")

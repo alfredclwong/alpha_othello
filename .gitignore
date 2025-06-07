@@ -1,4 +1,4 @@
-secret.txt
+*secret*.txt
 *.db
 
 # Python-generated files

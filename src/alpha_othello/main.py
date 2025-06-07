@@ -79,7 +79,7 @@ def evolve(
         "inspiration_ids": inspiration_ids,
     }
     variations_keys = list(PROMPT_VARIATIONS.keys())
-    if n_completions < 20 or not variations_keys:
+    if n_completions < 10 or not variations_keys:
         variation = None
     else:
         variation = random.choice(variations_keys)
@@ -189,7 +189,8 @@ def main_othello():
 
 def main_circles():
     temperature = 0.7
-    max_tokens = 4096
+    # max_tokens = 4096
+    max_tokens = None
     topk = 2
     prev = 2
     api_key = get_api_key()
@@ -223,15 +224,21 @@ The Python environment has the following additional libraries available: numpy, 
         completion_str = get_function_source(pack_26)
         completion_id = db.store_completion(
             completion_str,
-            "Place 26 circles in a very simple structured pattern with no overlaps.",
+            "Initial completion",
             [],
         )
         score_dict = evaluator.evaluate(completion_str)
         db.store_scores(score_dict, completion_id)
 
+    # llm = "google/gemini-2.0-flash-exp:free"
+    # llm = "meta-llama/llama-4-maverick:free"  # bad at coding
+    # llm = "qwen/qwen3-32b:free"  # very verbose reasoning
+    # llm = "deepseek/deepseek-r1-0528-qwen3-8b:free"  # super-verbose reasoning (16000 token response)
+    # llm = "qwen/qwen-2.5-coder-32b-instruct:free"
+    # llm = "qwen/qwen3-30b-a3b:free"
     llm = "google/gemma-3-27b-it:free"
 
-    for i in range(200):
+    for i in range(400):
         print(f"Generation {i}")
         evolve(
             db,
